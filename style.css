@@ -1,0 +1,1287 @@
+/* ===============================
+   RollingStock Planner - Stylesheet
+
+   防災備蓄管理ツール スタイルシート
+
+   機能:
+   - ダーク/ライトモード対応（CSS Variables）
+   - レスポンシブデザイン（PC/タブレット/モバイル対応）
+   - アクセシビリティ考慮（フォーカス表示、コントラスト）
+   - モダンなUI（カード型レイアウト、アニメーション）
+
+   構成:
+   1. CSS Variables（テーマカラー定義）
+   2. 基本スタイル（リセット、タイポグラフィ）
+   3. ヘッダー・ナビゲーション
+   4. モーダル・フォーム
+   5. テーブル・カード
+   6. グラフ・チャート
+   7. AI防災アドバイザー
+   8. 基礎知識タブ
+   9. レスポンシブ対応
+==================================*/
+
+/* ===============================
+   CSS Variables - テーマカラー定義
+
+   ダークモード（デフォルト）
+==================================*/
+:root{
+  --bg:#0b0c0f;               /* 背景色 */
+  --card:#14161a;             /* カード背景色 */
+  --text:#e8eaed;             /* テキスト色 */
+  --muted:#a9b0b8;            /* 補助テキスト色 */
+  --accent:#4cc9f0;           /* アクセントカラー（ボタン、リンク） */
+  --accent2:#80ffdb;          /* アクセントカラー2 */
+  --bad:#ff6b6b;              /* エラー・警告色（赤） */
+  --warn:#ffd166;             /* 注意色（黄） */
+  --good:#7bd88f;             /* 成功色（緑） */
+  --line:#2d3139;             /* 境界線色（通常） */
+  --line-strong:#3a3f4a;      /* 境界線色（強調） */
+}
+
+/* ライトモード - 落ち着いた見やすさ重視 */
+[data-theme="light"]{
+  --bg:#fafafa;
+  --card:#ffffff;
+  --text:#1a1a1a;
+  --muted:#666666;
+  --accent:#2563eb;
+  --accent2:#3b82f6;
+  --bad:#dc2626;
+  --warn:#ea580c;
+  --good:#16a34a;
+  --line:#e5e5e5;
+  --line-strong:#d4d4d8;
+}
+
+/* ===============================
+   基本スタイル
+==================================*/
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  padding:0;
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic UI',sans-serif;
+  transition:background-color 0.3s ease,color 0.3s ease;
+}
+a{color:var(--accent)}
+
+/* ===============================
+   ヘッダー
+==================================*/
+header.app-header{
+  padding:28px 16px 8px;
+  border-bottom:1px solid var(--line-strong);
+  position:relative;
+  text-align:center;
+}
+header h1{margin:0 0 6px 0;font-size:28px;letter-spacing:.5px}
+.tagline{margin:0;color:var(--muted)}
+
+/* ===============================
+   テーマ切り替えボタン
+==================================*/
+.theme-toggle{
+  position:absolute;
+  top:28px;
+  right:16px;
+  background:var(--card);
+  border:1px solid var(--line);
+  color:var(--text);
+  padding:8px 16px;
+  border-radius:20px;
+  cursor:pointer;
+  font-size:14px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  transition:all 0.2s ease;
+}
+.theme-toggle:hover{
+  background:var(--accent);
+  color:#fff;
+  border-color:var(--accent);
+}
+
+/* ===============================
+   ヘルプアイコン & ツールチップ
+
+   フォーム項目の説明を表示
+   - ホバーで表示（PC）
+   - タップで表示（モバイル）
+   - 画面端での自動調整（左列: 左揃え、右列: 右揃え）
+==================================*/
+.help-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:var(--muted);
+  color:var(--bg);
+  font-size:11px;
+  font-weight:bold;
+  cursor:help;
+  margin-left:4px;
+  position:relative;
+  vertical-align:middle;
+  flex-shrink:0;
+}
+.help-icon:hover{
+  background:var(--accent);
+  color:#fff;
+}
+
+/* ツールチップのスタイル */
+.help-icon[data-tooltip]{
+  position:relative;
+}
+.help-icon[data-tooltip]::before{
+  content:attr(data-tooltip);
+  position:absolute;
+  bottom:calc(100% + 8px);
+  left:0;
+  background:var(--card);
+  color:var(--text);
+  border:1px solid var(--line);
+  padding:10px 14px;
+  border-radius:8px;
+  font-size:13px;
+  font-weight:normal;
+  line-height:1.5;
+  white-space:normal;
+  min-width:min(200px, 60vw);
+  max-width:min(280px, 85vw);
+  width:max-content;
+  box-shadow:0 4px 12px rgba(0,0,0,0.3);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 0.2s ease;
+  z-index:10000;
+  text-align:left;
+}
+.help-icon[data-tooltip]::after{
+  content:'';
+  position:absolute;
+  bottom:calc(100% + 2px);
+  left:8px;
+  border:6px solid transparent;
+  border-top-color:var(--card);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 0.2s ease;
+  z-index:10001;
+}
+
+/* Right column tooltips (align to right to prevent overflow) */
+.modal-body .grid > div:nth-child(even) .help-icon[data-tooltip]::before{
+  left:auto;
+  right:0;
+}
+.modal-body .grid > div:nth-child(even) .help-icon[data-tooltip]::after{
+  left:auto;
+  right:8px;
+}
+.help-icon[data-tooltip]:hover::before,
+.help-icon[data-tooltip]:hover::after{
+  opacity:1;
+}
+
+/* Mobile: show tooltip on tap/focus */
+.help-icon[data-tooltip]:focus::before,
+.help-icon[data-tooltip]:focus::after,
+.help-icon[data-tooltip].active::before,
+.help-icon[data-tooltip].active::after{
+  opacity:1;
+}
+
+[data-theme="light"] .help-icon[data-tooltip]::before{
+  box-shadow:0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Chart containers */
+.chart-container{
+  position:relative;
+  height:200px;
+  width:100%;
+}
+.chart-container.small{
+  height:140px;
+}
+
+/* Modal */
+.modal-overlay{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  background:rgba(0,0,0,0.7);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:1000;
+  padding:20px;
+  animation:fadeIn 0.2s ease;
+}
+.modal-overlay.active{
+  display:flex;
+}
+
+/* ===============================
+   モーダルダイアログ
+
+   アイテム追加・編集用のモーダルUI
+   - 2列グリッドレイアウト（PCでは2列、モバイルでは1列）
+   - ツールチップ表示のためoverflow: visible
+   - アニメーション効果（slideUp）
+==================================*/
+.modal{
+  background:var(--card);
+  border:1px solid var(--line-strong);
+  border-radius:16px;
+  max-width:900px;
+  width:95%;
+  max-height:90vh;
+  overflow:visible;  /* ツールチップが切れないように */
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  animation:slideUp 0.3s ease;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+}
+/* Modal内のグリッドレイアウトを2列固定に */
+.modal-body .grid{
+  grid-template-columns:repeat(2, 1fr);
+  gap:16px;
+}
+[data-theme="light"] .modal{
+  box-shadow:0 20px 60px rgba(0,0,0,0.2);
+}
+.modal-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:20px 24px;
+  border-bottom:1px solid var(--line-strong);
+  position:sticky;
+  top:0;
+  background:var(--card);
+  z-index:1;
+}
+.modal-header h2{
+  margin:0;
+  font-size:20px;
+}
+.modal-close{
+  background:transparent;
+  border:1px solid var(--line);
+  color:var(--text);
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:20px;
+  line-height:1;
+  transition:all 0.2s ease;
+}
+.modal-close:hover{
+  background:var(--accent);
+  color:#fff;
+  border-color:var(--accent);
+}
+.modal-body{
+  padding:24px;
+  overflow-y:auto;
+  max-height:calc(90vh - 100px);
+  flex:1;
+}
+@keyframes fadeIn{
+  from{opacity:0}
+  to{opacity:1}
+}
+@keyframes slideUp{
+  from{transform:translateY(30px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+
+/* Add item button - emphasized */
+.add-item-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff;
+  border:none;
+  padding:11px 20px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:15px;
+  font-weight:600;
+  transition:all 0.2s ease;
+  box-shadow:0 2px 8px rgba(76,201,240,0.2);
+}
+.add-item-btn:hover{
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  transform:translateY(-2px);
+  box-shadow:0 6px 16px rgba(76,201,240,0.4);
+}
+.add-item-btn:active{
+  transform:translateY(0);
+}
+[data-theme="light"] .add-item-btn{
+  box-shadow:0 2px 8px rgba(37,99,235,0.15);
+}
+[data-theme="light"] .add-item-btn:hover{
+  box-shadow:0 6px 16px rgba(37,99,235,0.3);
+}
+
+.tabs{display:flex;gap:8px;padding:12px 12px;border-bottom:1px solid var(--line-strong);position:sticky;top:0;background:var(--bg);z-index:5;justify-content:center}
+.tab{background:transparent;border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:10px;cursor:pointer}
+.tab.active{border-color:var(--accent);box-shadow:0 0 0 2px #000 inset;color:#fff}
+[data-theme="light"] .tab.active{box-shadow:0 0 0 2px #fff inset;color:var(--accent)}
+
+main{padding:16px;max-width:1100px;margin:0 auto}
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fade .2s ease}
+@keyframes fade{from{opacity:.5}to{opacity:1}}
+
+.panel-header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
+.inline-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.file-btn{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  border:1px solid var(--line);
+  background:var(--card);
+  color:var(--text);
+  padding:10px 16px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:500;
+  transition:all 0.2s ease;
+  white-space:nowrap;
+}
+.file-btn:hover{
+  background:var(--line);
+  transform:translateY(-1px);
+  box-shadow:0 2px 8px rgba(0,0,0,0.2);
+}
+.file-btn input{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  cursor:pointer;
+}
+[data-theme="light"] .file-btn{
+  background:#ffffff;
+  border-color:#e5e5e5;
+}
+[data-theme="light"] .file-btn:hover{
+  background:#f5f5f5;
+  border-color:#d4d4d4;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+.card{background:var(--card);border:1px solid var(--line-strong);border-radius:16px;padding:16px}
+.cards{display:grid;gap:12px;margin-block:12px}
+.cards.two{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.cards.three{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.right{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+input,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0f1114;color:var(--text)}
+input[type="date"]{color-scheme:dark}
+[data-theme="light"] input,
+[data-theme="light"] select{background:#ffffff;color:var(--text);border:1px solid var(--line)}
+[data-theme="light"] input[type="date"]{color-scheme:light}
+
+/* Button base styles - unified */
+.btn{
+  border:1px solid var(--line);
+  background:var(--card);
+  color:var(--text);
+  padding:10px 16px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:500;
+  transition:all 0.2s ease;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  white-space:nowrap;
+}
+.btn:hover{
+  background:var(--line);
+  transform:translateY(-1px);
+  box-shadow:0 2px 8px rgba(0,0,0,0.2);
+}
+.btn:active{
+  transform:translateY(0);
+}
+.btn:disabled{
+  opacity:0.5;
+  cursor:not-allowed;
+  transform:none;
+}
+
+/* Primary button */
+.btn.primary{
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  color:#fff;
+  border:none;
+  font-weight:600;
+}
+.btn.primary:hover{
+  background:linear-gradient(90deg,var(--accent2),var(--accent));
+  box-shadow:0 4px 12px rgba(76,201,240,0.3);
+}
+
+/* Danger button */
+.btn.danger{
+  border-color:#632b2b;
+  background:#2b1616;
+  color:#ffdede;
+}
+.btn.danger:hover{
+  background:#3d1f1f;
+  border-color:#8b3a3a;
+  box-shadow:0 2px 8px rgba(255,107,107,0.2);
+}
+
+/* Small button for inline actions */
+.btn-small{
+  border:1px solid var(--line);
+  background:var(--card);
+  color:var(--text);
+  padding:6px 10px;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:500;
+  transition:all 0.2s ease;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.btn-small:hover{
+  background:var(--accent);
+  color:#fff;
+  border-color:var(--accent);
+}
+
+/* Expiry input group with buttons */
+.expiry-input-group{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  align-items:stretch;
+}
+.expiry-button-row{
+  display:flex;
+  gap:8px;
+  justify-content:flex-start;
+}
+
+/* Family section grouping */
+.family-section{
+  margin-bottom:24px;
+  padding-bottom:20px;
+  border-bottom:1px solid var(--line);
+}
+.family-section:last-of-type{
+  border-bottom:none;
+  padding-bottom:0;
+}
+.section-label{
+  margin:0 0 16px 0;
+  font-size:16px;
+  font-weight:600;
+  color:var(--text);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.family-section .grid{
+  grid-template-columns:repeat(auto-fit, minmax(160px, 200px));
+  gap:16px 20px;
+  justify-content:start;
+}
+.family-section input[type="number"],
+.family-section select{
+  max-width:200px;
+}
+
+/* Expert advice section */
+.expert-advice{
+  background:linear-gradient(135deg, var(--card) 0%, rgba(76,201,240,0.05) 100%);
+  border:2px solid var(--accent);
+  margin-top:24px;
+}
+.expert-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:16px;
+  flex-wrap:wrap;
+  gap:12px;
+}
+.expert-header h3{
+  margin:0;
+  color:var(--accent);
+}
+.expert-badge{
+  background:var(--accent);
+  color:#fff;
+  padding:4px 12px;
+  border-radius:12px;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:0.5px;
+}
+.expert-content{
+  line-height:1.8;
+}
+.analysis-section{
+  margin-bottom:20px;
+  padding:16px;
+  background:var(--bg);
+  border-radius:8px;
+  border-left:3px solid var(--accent);
+}
+.analysis-section:last-child{
+  margin-bottom:0;
+}
+.analysis-section h4{
+  margin:0 0 12px 0;
+  color:var(--text);
+  font-size:15px;
+  font-weight:600;
+}
+.analysis-section p{
+  margin:0;
+  color:var(--text);
+  line-height:1.8;
+}
+.analysis-section strong{
+  color:var(--accent2);
+}
+.analysis-section strong.warning{
+  color:var(--bad);
+}
+.analysis-section strong.caution{
+  color:var(--warn);
+}
+.analysis-section strong.good{
+  color:var(--good);
+}
+
+/* ===============================
+   AI防災アドバイザー - グレード評価バッジ
+
+   総合評価を視覚的に強調表示
+   - 4段階評価：優秀/良好/要改善/緊急対応必要
+   - グラデーション背景とパルスアニメーション
+   - 緊急度に応じた色分け
+==================================*/
+.overall-grade{
+  text-align:center;
+  border-left:none;
+  border:3px solid var(--accent);
+}
+.grade-badge{
+  display:inline-block;
+  font-size:28px;
+  font-weight:800;
+  padding:16px 32px;
+  border-radius:12px;
+  margin:12px 0;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  animation:pulse 2s ease-in-out infinite;  /* 注目を集めるアニメーション */
+}
+@keyframes pulse{
+  0%, 100%{ transform:scale(1); }
+  50%{ transform:scale(1.02); }
+}
+
+/* 優秀（緑グラデーション） */
+.grade-badge.grade-excellent{
+  background:linear-gradient(135deg, var(--good), #4ade80);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(123,216,143,0.4);
+}
+
+/* 良好（青グラデーション） */
+.grade-badge.grade-good{
+  background:linear-gradient(135deg, #3b82f6, #60a5fa);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(59,130,246,0.4);
+}
+.grade-badge.grade-warning{
+  background:linear-gradient(135deg, var(--warn), #fb923c);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(255,209,102,0.5);
+  animation:pulse-warning 1.5s ease-in-out infinite;
+}
+@keyframes pulse-warning{
+  0%, 100%{ transform:scale(1); box-shadow:0 4px 16px rgba(255,209,102,0.5); }
+  50%{ transform:scale(1.05); box-shadow:0 6px 20px rgba(255,209,102,0.7); }
+}
+.grade-badge.grade-critical{
+  background:linear-gradient(135deg, var(--bad), #ef4444);
+  color:#fff;
+  box-shadow:0 4px 20px rgba(255,107,107,0.6);
+  animation:pulse-critical 1s ease-in-out infinite;
+}
+@keyframes pulse-critical{
+  0%, 100%{ transform:scale(1); box-shadow:0 4px 20px rgba(255,107,107,0.6); }
+  50%{ transform:scale(1.08); box-shadow:0 8px 24px rgba(255,107,107,0.9); }
+}
+.grade-message{
+  font-size:15px;
+  margin-top:12px;
+  font-weight:500;
+}
+
+/* Coverage grid */
+.coverage-grid{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.coverage-item{
+  padding:14px 18px;
+  border-radius:10px;
+  border-left:4px solid var(--accent);
+  background:rgba(76,201,240,0.05);
+  transition:all 0.3s ease;
+}
+.coverage-item.ok{
+  border-left-color:var(--good);
+  background:rgba(123,216,143,0.08);
+}
+.coverage-item.shortage{
+  border-left-color:var(--warn);
+  background:rgba(255,209,102,0.12);
+  box-shadow:0 2px 8px rgba(255,209,102,0.2);
+}
+.coverage-item.critical-shortage{
+  border-left-color:var(--bad);
+  background:rgba(255,107,107,0.12);
+  box-shadow:0 2px 12px rgba(255,107,107,0.3);
+  animation:blink-shortage 2s ease-in-out infinite;
+}
+@keyframes blink-shortage{
+  0%, 100%{ box-shadow:0 2px 12px rgba(255,107,107,0.3); }
+  50%{ box-shadow:0 4px 16px rgba(255,107,107,0.5); }
+}
+.coverage-percent{
+  display:inline-block;
+  font-size:18px;
+  font-weight:700;
+  color:var(--warn);
+  margin:0 8px;
+}
+.coverage-percent.ok{
+  color:var(--good);
+}
+.shortage-amount{
+  display:inline-block;
+  background:var(--bad);
+  color:#fff;
+  padding:4px 12px;
+  border-radius:6px;
+  font-size:14px;
+  font-weight:700;
+  margin-left:8px;
+}
+.action-hint{
+  margin-top:8px;
+  font-size:13px;
+  color:var(--muted);
+  padding-left:8px;
+  border-left:2px solid var(--line);
+}
+
+.recommendation-list{
+  margin:8px 0 0 0;
+  padding-left:20px;
+  list-style:none;
+}
+.recommendation-list li{
+  margin:8px 0;
+  padding-left:8px;
+  position:relative;
+}
+.recommendation-list li::before{
+  content:'▸';
+  position:absolute;
+  left:-12px;
+  color:var(--accent);
+  font-weight:bold;
+}
+
+/* Light mode adjustments for expert section */
+[data-theme="light"] .expert-advice{
+  background:linear-gradient(135deg, #ffffff 0%, rgba(37,99,235,0.03) 100%);
+  border-color:var(--accent);
+}
+[data-theme="light"] .analysis-section{
+  background:#f9fafb;
+}
+[data-theme="light"] .coverage-item.ok{
+  background:rgba(22,163,74,0.08);
+}
+[data-theme="light"] .coverage-item.shortage{
+  background:rgba(234,88,12,0.08);
+}
+[data-theme="light"] .coverage-item.critical-shortage{
+  background:rgba(220,38,38,0.08);
+}
+
+/* Light mode adjustments */
+[data-theme="light"] .btn{
+  background:#ffffff;
+  border-color:#e5e5e5;
+}
+[data-theme="light"] .btn:hover{
+  background:#f5f5f5;
+  border-color:#d4d4d4;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+[data-theme="light"] .btn.primary{
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  color:#ffffff;
+}
+[data-theme="light"] .btn.primary:hover{
+  background:linear-gradient(90deg,var(--accent2),var(--accent));
+  box-shadow:0 4px 12px rgba(37,99,235,0.25);
+}
+[data-theme="light"] .btn.danger{
+  background:#fee2e2;
+  border-color:#dc2626;
+  color:#7f1d1d;
+}
+[data-theme="light"] .btn.danger:hover{
+  background:#fecaca;
+  border-color:#b91c1c;
+}
+
+/* ===============================
+   在庫管理テーブル
+
+   備蓄アイテム一覧を表示
+   - スティッキーヘッダー（スクロール時に見出しが固定）
+   - レスポンシブ（横スクロール対応）
+   - ページネーション（50件/ページ）
+==================================*/
+.filter-row{display:flex;gap:8px;margin:12px 0}
+.table-wrap{overflow:auto;border:1px solid var(--line-strong);border-radius:12px}
+table{width:100%;border-collapse:collapse;background:#0e1115}
+thead th{
+  position:sticky;  /* スクロール時にヘッダー固定 */
+  top:0;
+  background:#0e1115;
+  border-bottom:1px solid var(--line-strong);
+  padding:10px;
+  text-align:left;
+}
+tbody td, tfoot td{border-top:1px solid var(--line);padding:10px;vertical-align:top}
+[data-theme="light"] table{background:#ffffff}
+[data-theme="light"] thead th{background:#f9fafb}
+
+/* ===============================
+   ステータスバッジ（4段階）
+
+   期限の状態を色分け表示
+   - 🔴 赤（red）: 期限切れ（昨日以前）
+   - 🟠 橙（orange）: 本日期限（今日）
+   - 🟡 黄（yellow）: 要消費（警告閾値以内）
+   - 🟢 緑（green）: OK（警告閾値を超えている）
+==================================*/
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:#cbd5e1}
+.badge.red{background:#2a1515;border-color:#6b2b2b;color:#ffdada}         /* 期限切れ */
+.badge.orange{background:#2a1f15;border-color:#6b4a2b;color:#ffc89b}      /* 本日期限 */
+.badge.yellow{background:#2a2415;border-color:#6b5a2b;color:#ffe8b0}      /* 要消費 */
+.badge.green{background:#162a1a;border-color:#2b6b3a;color:#d6ffe0}
+[data-theme="light"] .badge{color:var(--text)}
+[data-theme="light"] .badge.red{background:#fee2e2;border-color:#dc2626;color:#7f1d1d}
+[data-theme="light"] .badge.orange{background:#ffedd5;border-color:#f97316;color:#7c2d12}
+[data-theme="light"] .badge.yellow{background:#fed7aa;border-color:#ea580c;color:#7c2d12}
+[data-theme="light"] .badge.green{background:#dcfce7;border-color:#16a34a;color:#14532d}
+
+ul.bullet{margin:0;padding-left:18px}
+ul.bullet li{margin:6px 0}
+ul.checklist{margin:0;padding-left:20px}
+ul.checklist li{margin:.3rem 0}
+
+/* Basics tab specific styles */
+.info-table{
+  width:100%;
+  border-collapse:collapse;
+  margin:16px 0;
+}
+.info-table th,
+.info-table td{
+  padding:12px;
+  text-align:left;
+  border:1px solid var(--line);
+}
+.info-table th{
+  background:var(--bg);
+  font-weight:600;
+  color:var(--accent);
+}
+.info-table tbody tr:hover{
+  background:var(--bg);
+}
+
+.note{
+  background:rgba(76,201,240,0.1);
+  border-left:3px solid var(--accent);
+  padding:12px 16px;
+  margin:16px 0;
+  border-radius:6px;
+  font-size:14px;
+}
+
+.warning{
+  background:rgba(255,107,107,0.1);
+  border-left:3px solid var(--bad);
+  padding:12px 16px;
+  margin:16px 0;
+  border-radius:6px;
+  font-size:14px;
+  color:var(--bad);
+}
+
+.success{
+  background:rgba(123,216,143,0.1);
+  border-left:3px solid var(--good);
+  padding:12px 16px;
+  margin:16px 0;
+  border-radius:6px;
+  font-size:14px;
+  color:var(--good);
+}
+
+.example-box{
+  background:var(--bg);
+  border:1px solid var(--line);
+  padding:16px;
+  margin:16px 0;
+  border-radius:8px;
+}
+.example-box p{
+  margin:8px 0;
+}
+.example-box ul{
+  margin:8px 0;
+  padding-left:20px;
+}
+
+.comparison-box{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+  gap:16px;
+  margin:16px 0;
+}
+.comparison-box > div{
+  background:var(--bg);
+  border:1px solid var(--line);
+  padding:16px;
+  border-radius:8px;
+}
+.comparison-box h4{
+  margin-top:0;
+}
+
+.failure-box{
+  background:var(--bg);
+  border-left:4px solid var(--bad);
+  padding:16px;
+  margin:12px 0;
+  border-radius:6px;
+}
+.failure-box h4{
+  margin:0 0 8px 0;
+  color:var(--bad);
+}
+.failure-box p{
+  margin:4px 0;
+}
+.solution{
+  color:var(--good);
+  font-weight:600;
+}
+
+/* ===============================
+   基礎知識タブ - アコーディオン
+
+   13セクションの防災知識をアコーディオン形式で提供
+   - デフォルト: 閉じた状態
+   - クリックで開閉
+   - 見出しと内容を視覚的に区別（背景色・インデント）
+==================================*/
+#basics h4{
+  margin:20px 0 12px 0;
+  font-size:16px;
+  color:var(--text);
+}
+
+#basics details{
+  margin-bottom:12px;
+  border-radius:8px;
+  overflow:hidden;
+  background:var(--bg);
+  border:1px solid var(--line-strong);
+}
+
+#basics summary{
+  font-size:16px;
+  font-weight:600;
+  padding:16px 20px;
+  cursor:pointer;
+  user-select:none;
+  background:var(--card);
+  border-left:4px solid var(--accent);
+  transition:background 0.2s ease;
+  margin:0;
+}
+
+#basics summary:hover{
+  background:rgba(76, 201, 240, 0.1);
+}
+
+/* Content area padding when details is open */
+#basics details[open]{
+  padding:0 0 20px 0;
+}
+
+#basics details[open] > h4{
+  margin:20px 28px 12px 28px;
+}
+
+#basics details[open] > h4:first-of-type{
+  margin-top:24px;
+}
+
+#basics details[open] > ul,
+#basics details[open] > ol{
+  margin-left:48px;
+  margin-right:28px;
+  margin-top:8px;
+  margin-bottom:16px;
+}
+
+#basics details[open] > p{
+  margin:12px 28px;
+}
+
+#basics details[open] > table{
+  margin:16px 28px;
+}
+
+#basics details[open] > div{
+  margin:16px 28px;
+}
+
+/* Light mode adjustments for basics */
+[data-theme="light"] #basics summary:hover{
+  background:rgba(37,99,235,0.08);
+}
+
+[data-theme="light"] .note{
+  background:rgba(37,99,235,0.08);
+}
+[data-theme="light"] .warning{
+  background:rgba(220,38,38,0.08);
+}
+[data-theme="light"] .success{
+  background:rgba(22,163,74,0.08);
+}
+[data-theme="light"] .info-table tbody tr:hover{
+  background:#f9fafb;
+}
+
+footer{margin-top:40px;border-top:1px solid var(--line-strong)}
+.footer{max-width:1100px;margin:0 auto;padding:14px 16px;color:var(--muted);text-align:center}
+
+/* Accessibility improvements */
+.btn:focus, input:focus, select:focus{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.btn:focus:not(:focus-visible){outline:none}
+
+/* Required field emphasis */
+.req{color:var(--bad);font-weight:bold;margin-left:4px}
+input:required{border-left:3px solid var(--accent)}
+
+/* Category badges with colors */
+.category-badge{
+  padding:4px 8px;
+  border-radius:12px;
+  font-size:11px;
+  font-weight:500;
+  display:inline-block;
+}
+
+/* Dark mode category colors */
+.category-badge.food{background:#2a251a;border:1px solid #6b5a3a;color:#ffe8b0}
+.category-badge.water{background:#1a2534;border:1px solid #3a5a7b;color:#b0d9ff}
+.category-badge.medicine{background:#2a1a25;border:1px solid #6b3a5a;color:#ffb0e8}
+.category-badge.pet-food{background:#252a1a;border:1px solid #5a6b3a;color:#e8ffb0}
+.category-badge.daily{background:#25221a;border:1px solid #6b623a;color:#fff0b0}
+.category-badge.tool{background:#1a2a2a;border:1px solid #3a6b6b;color:#b0ffff}
+.category-badge.other{background:#22222a;border:1px solid #4a4a6b;color:#d0d0ff}
+
+/* Light mode category colors */
+[data-theme="light"] .category-badge.food{background:#fef3c7;border:1px solid #d97706;color:#78350f}
+[data-theme="light"] .category-badge.water{background:#dbeafe;border:1px solid #2563eb;color:#1e3a8a}
+[data-theme="light"] .category-badge.medicine{background:#fce7f3;border:1px solid #db2777;color:#831843}
+[data-theme="light"] .category-badge.pet-food{background:#dcfce7;border:1px solid #16a34a;color:#14532d}
+[data-theme="light"] .category-badge.daily{background:#fef9c3;border:1px solid #ca8a04;color:#713f12}
+[data-theme="light"] .category-badge.tool{background:#cffafe;border:1px solid #0891b2;color:#164e63}
+[data-theme="light"] .category-badge.other{background:#e0e7ff;border:1px solid #6366f1;color:#312e81}
+
+/* Editing row highlight */
+tbody tr.editing{
+  background:rgba(76,201,240,0.1);
+  border-left:3px solid var(--accent);
+}
+[data-theme="light"] tbody tr.editing{
+  background:rgba(37,99,235,0.08);
+}
+
+/* Table scroll hint */
+.table-wrap{
+  position:relative;
+}
+.table-wrap.has-scroll::after{
+  content:'→';
+  position:absolute;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  background:linear-gradient(90deg,transparent,var(--bg) 20%);
+  padding:20px 12px;
+  pointer-events:none;
+  color:var(--accent);
+  font-size:20px;
+  opacity:0.7;
+}
+
+/* Empty state */
+.empty-state{
+  text-align:center;
+  padding:60px 20px;
+  color:var(--muted);
+}
+.empty-state h3{
+  margin:0 0 8px 0;
+  color:var(--text);
+  font-size:18px;
+}
+.empty-state p{
+  margin:0;
+  font-size:14px;
+}
+
+/* Pagination */
+.pagination{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:12px;
+  margin:16px 0;
+  padding:12px;
+}
+.pagination .btn{
+  min-width:80px;
+}
+.pagination .page-info{
+  color:var(--muted);
+  font-size:14px;
+  margin:0 8px;
+  font-weight:500;
+}
+
+/* System Settings */
+.settings-row{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.settings-row label{
+  font-size:14px;
+  font-weight:500;
+  color:var(--text);
+  margin:0;
+}
+.settings-row select{
+  max-width:200px;
+}
+.settings-row small{
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
+
+.settings-actions{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+}
+.settings-actions > div{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  align-items:flex-start;
+}
+.settings-actions .btn,
+.settings-actions .file-btn{
+  max-width:280px;
+  width:auto;
+}
+.settings-actions small{
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
+
+/* Responsive design */
+/* ===============================
+   レスポンシブ対応 - タブレット
+   (768px以下)
+
+   - タブの横スクロール対応
+   - コントロール類を縦並びに変更
+==================================*/
+@media (max-width:768px){
+  .panel-header{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .inline-controls{
+    justify-content:flex-start;
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .inline-controls label,
+  .inline-controls .btn,
+  .inline-controls .file-btn{
+    width:100%;
+  }
+  .tabs{
+    overflow-x:auto;  /* タブが多い場合は横スクロール */
+    -webkit-overflow-scrolling:touch;
+  }
+  .tab{
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+}
+
+/* ===============================
+   レスポンシブ対応 - モバイル
+   (640px以下)
+
+   - グリッドを1列表示に変更
+   - モーダルのグリッドも1列に
+   - ツールチップを左揃えに統一
+==================================*/
+@media (max-width:640px){
+  .grid{
+    grid-template-columns:1fr;
+  }
+  .modal-body .grid{
+    grid-template-columns:1fr;  /* モーダル内も1列表示 */
+  }
+  /* ツールチップを左揃えに統一（右列対応を解除） */
+  .modal-body .grid > div:nth-child(even) .help-icon[data-tooltip]::before{
+    left:0;
+    right:auto;
+  }
+  .modal-body .grid > div:nth-child(even) .help-icon[data-tooltip]::after{
+    left:8px;
+    right:auto;
+  }
+  .cards.two,
+  .cards.three{
+    grid-template-columns:1fr;
+  }
+  /* Button sizing for mobile */
+  .btn,
+  .file-btn{
+    padding:12px 16px;
+    min-height:44px;
+  }
+  .add-item-btn{
+    padding:12px 20px;
+  }
+  header h1{
+    font-size:22px;
+  }
+  .tagline{
+    font-size:13px;
+  }
+  .right{
+    flex-direction:column;
+  }
+  .right .btn{
+    width:100%;
+  }
+  .inline-controls{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .inline-controls .btn,
+  .inline-controls .file-btn,
+  .inline-controls .add-item-btn{
+    width:100%;
+  }
+  /* Make table more mobile friendly */
+  table{
+    font-size:13px;
+  }
+  tbody td, tfoot td, thead th{
+    padding:8px 6px;
+  }
+  /* Theme toggle on mobile */
+  .theme-toggle{
+    top:20px;
+    right:12px;
+    padding:6px 10px;
+    font-size:12px;
+  }
+  /* Tooltip adjustments for mobile */
+  .help-icon[data-tooltip]::before{
+    left:auto;
+    right:0;
+    transform:translateX(0);
+    min-width:200px;
+    max-width:280px;
+  }
+  .help-icon[data-tooltip]::after{
+    left:auto;
+    right:8px;
+    transform:translateX(0);
+  }
+}

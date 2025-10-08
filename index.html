@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RollingStock Planner</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="assets/favicon.svg" />
+  <meta name="description" content="AI防災アドバイザー搭載のローリングストック専用ツール。家族構成（人間+ペット）から必要量を自動計算、期限管理で食品ロス防止、3日〜半年の備蓄計画に対応。完全無料・ブラウザー完結型。" />
+  <!-- Security Headers -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="X-Frame-Options" content="DENY" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <!-- Chart.js CDN (version pinned for security) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button class="theme-toggle" id="themeToggle" aria-label="テーマ切り替え">
+      <span id="themeIcon">☀️</span>
+      <span id="themeText">ライトモードへ切り替え</span>
+    </button>
+    <h1>RollingStock Planner</h1>
+    <p class="tagline">備蓄のローリングストックに特化し、家族とペットのための防災備蓄管理ツール。</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Main Tabs">
+    <button class="tab active" data-tab="stock" role="tab" aria-selected="true">在庫管理</button>
+    <button class="tab" data-tab="family" role="tab" aria-selected="false">家族構成</button>
+    <button class="tab" data-tab="alerts" role="tab" aria-selected="false">アラート・提案</button>
+    <button class="tab" data-tab="settings" role="tab" aria-selected="false">システム設定</button>
+    <button class="tab" data-tab="basics" role="tab" aria-selected="false">基礎知識</button>
+  </nav>
+
+  <main>
+    <!-- Stock Tab -->
+    <section id="stock" class="tab-panel active" role="tabpanel">
+      <div class="panel-header">
+        <h2>在庫管理</h2>
+        <div class="inline-controls">
+          <button id="addItemBtn" class="add-item-btn">
+            <span>+</span>
+            <span>アイテム追加</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <input type="text" id="search" placeholder="検索（品名・カテゴリ・単位）" />
+        <select id="sort">
+          <option value="expiryAsc">賞味期限 早い順</option>
+          <option value="expiryDesc">賞味期限 遅い順</option>
+          <option value="nameAsc">品名 A→Z</option>
+          <option value="nameDesc">品名 Z→A</option>
+          <option value="catAsc">カテゴリ</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table id="stockTable">
+          <thead>
+            <tr>
+              <th>品名</th>
+              <th>カテゴリ</th>
+              <th>数量</th>
+              <th>単位</th>
+              <th>期限</th>
+              <th>栄養</th>
+              <th>状態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="8" id="summaryRow">合計：—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="cards three">
+        <div class="card">
+          <h3>水の在庫（概算）</h3>
+          <p id="waterTotal">— L</p>
+        </div>
+        <div class="card">
+          <h3>食料のカロリー（概算）</h3>
+          <p id="kcalTotal">— kcal</p>
+        </div>
+        <div class="card">
+          <h3>備蓄品カテゴリ別の割合</h3>
+          <div class="chart-container small">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Family Setup Tab -->
+    <section id="family" class="tab-panel" role="tabpanel">
+      <h2>家族構成</h2>
+      <form id="familyForm" class="card">
+        <div class="family-section">
+          <h4 class="section-label">👥 人間</h4>
+          <div class="grid">
+            <div>
+              <label>成人（18–64歳）
+                <span class="help-icon" data-tooltip="18歳から64歳までの人数を入力します。1人あたり1日4Lの水と2000kcalで計算します。">?</span>
+              </label>
+              <input type="number" id="adults" min="0" value="1" />
+            </div>
+            <div>
+              <label>子ども（0–17歳）
+                <span class="help-icon" data-tooltip="0歳から17歳までの人数を入力します。1人あたり1日2Lの水と1400kcalで計算します。">?</span>
+              </label>
+              <input type="number" id="children" min="0" value="0" />
+            </div>
+            <div>
+              <label>高齢者（65歳以上）
+                <span class="help-icon" data-tooltip="65歳以上の人数を入力します。1人あたり1日3Lの水と1800kcalで計算します。">?</span>
+              </label>
+              <input type="number" id="seniors" min="0" value="0" />
+            </div>
+          </div>
+        </div>
+
+        <div class="family-section">
+          <h4 class="section-label">🐾 ペット</h4>
+          <div class="grid">
+            <div>
+              <label>犬（頭数）
+                <span class="help-icon" data-tooltip="飼育している犬の頭数を入力します。1頭あたり1日1Lの水で計算します。">?</span>
+              </label>
+              <input type="number" id="dogs" min="0" value="0" />
+            </div>
+            <div>
+              <label>猫（頭数）
+                <span class="help-icon" data-tooltip="飼育している猫の頭数を入力します。1頭あたり1日0.3Lの水で計算します。">?</span>
+              </label>
+              <input type="number" id="cats" min="0" value="0" />
+            </div>
+          </div>
+        </div>
+
+        <div class="family-section">
+          <h4 class="section-label">📅 想定日数</h4>
+          <div class="grid">
+            <div>
+              <label>想定日数
+                <span class="help-icon" data-tooltip="災害時に備蓄で生活する日数を想定します。最低3日、推奨は7〜14日です。地域の特性や季節に応じて設定してください。">?</span>
+              </label>
+              <select id="days">
+                <option value="3">3日</option>
+                <option value="7" selected>7日</option>
+                <option value="14">14日</option>
+                <option value="30">1ヶ月（30日）</option>
+                <option value="180">半年（180日）</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="right">
+          <button type="submit" class="btn primary">計算して保存</button>
+          <button type="button" id="resetFamily" class="btn">初期化</button>
+        </div>
+      </form>
+
+      <h2>必要量計算</h2>
+      <div class="cards three">
+        <div class="card">
+          <h3>必要水量（人＋ペット）
+            <span class="help-icon" data-tooltip="家族構成と想定日数から計算した、必要な水の総量です。飲用だけでなく調理や衛生用途も含みます。">?</span>
+          </h3>
+          <p id="needWater">— L</p>
+          <small>基準：成人4L/日・子ども2L/日・高齢者3L/日・犬1L/日・猫0.3L/日</small>
+        </div>
+        <div class="card">
+          <h3>必要カロリー（人）
+            <span class="help-icon" data-tooltip="家族構成と想定日数から計算した、必要なカロリーの総量です。通常より活動量が低いことを想定した標準的な値です。">?</span>
+          </h3>
+          <p id="needKcal">— kcal</p>
+          <small>基準：成人2000 / 子ども1400 / 高齢者1800 (kcal/日)</small>
+        </div>
+        <div class="card">
+          <h3>在庫充足率
+            <span class="help-icon" data-tooltip="現在の在庫が、必要量に対して何%満たしているかを表示します。100%以上で必要量を確保できています。">?</span>
+          </h3>
+          <p id="coverage">—</p>
+          <small>水・カロリーそれぞれの達成率を表示</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- Alerts Tab -->
+    <section id="alerts" class="tab-panel" role="tabpanel">
+      <h2>アラート</h2>
+      <div class="cards two">
+        <div class="card">
+          <h3>期限切れ / 期限間近
+            <span class="help-icon" data-tooltip="期限が切れている、または警告閾値内に期限が来るアイテムを表示します。早めに消費または買い替えを検討してください。">?</span>
+          </h3>
+          <ul id="expiryList" class="bullet"></ul>
+        </div>
+        <div class="card">
+          <h3>ローリングストック推奨（今週消費）
+            <span class="help-icon" data-tooltip="14日以内に期限が来るアイテムを表示します。日常の食事で消費し、新しいものを補充することで、常に新鮮な備蓄を維持できます。">?</span>
+          </h3>
+          <ul id="rollingList" class="bullet"></ul>
+        </div>
+      </div>
+
+      <div class="cards two">
+        <div class="card">
+          <h3>水の充足率
+            <span class="help-icon" data-tooltip="左から「必要量（L）」「現在の在庫（L）」「達成率（%）」を表示します。達成率が100%以上なら目標を達成しています。">?</span>
+          </h3>
+          <div class="chart-container">
+            <canvas id="waterChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3>カロリーの充足率
+            <span class="help-icon" data-tooltip="左から「必要量（kcal）」「現在の在庫（kcal）」「達成率（%）」を表示します。達成率が100%以上なら目標を達成しています。">?</span>
+          </h3>
+          <div class="chart-container">
+            <canvas id="kcalChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <h2>提案</h2>
+      <div class="card expert-advice">
+        <div class="expert-header">
+          <h3>🎓 防災専門家による総合分析</h3>
+          <span class="expert-badge">AI防災アドバイザー</span>
+        </div>
+        <div id="expertAnalysis" class="expert-content">
+          <p>—</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- System Settings Tab -->
+    <section id="settings" class="tab-panel" role="tabpanel">
+      <h2>システム設定</h2>
+
+      <div class="card">
+        <h3>アラート設定
+          <span class="help-icon" data-tooltip="期限切れ警告のしきい値を設定します。この期間内に期限が来るアイテムを「要消費」として警告表示します。">?</span>
+        </h3>
+        <div class="settings-row">
+          <label>警告閾値（月）:</label>
+          <select id="alertMonths">
+            <option value="1">1ヶ月</option>
+            <option value="2" selected>2ヶ月</option>
+            <option value="3">3ヶ月</option>
+            <option value="6">6ヶ月</option>
+          </select>
+          <small>期限がこの期間内に来るアイテムを黄色で警告表示します</small>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>データ管理
+          <span class="help-icon" data-tooltip="在庫データと家族設定をJSONファイルでバックアップ・復元できます。">?</span>
+        </h3>
+        <div class="settings-actions">
+          <div>
+            <button id="exportJson" class="btn primary">
+              <span>📥</span>
+              <span>データをエクスポート</span>
+            </button>
+            <small>すべての在庫データと設定をJSONファイルでダウンロードします</small>
+          </div>
+          <div>
+            <label class="file-btn">
+              <span>📤</span>
+              <span>データをインポート</span>
+              <input type="file" id="importJson" accept="application/json" />
+            </label>
+            <small>以前にエクスポートしたJSONファイルから復元します</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>データ削除
+          <span class="help-icon" data-tooltip="すべての在庫データを削除します。この操作は取り消せません。">?</span>
+        </h3>
+        <div class="settings-actions">
+          <div>
+            <button id="clearAll" class="btn danger">
+              <span>🗑️</span>
+              <span>全アイテムを削除</span>
+            </button>
+            <small>⚠️ すべての在庫データが完全に削除されます。実行前にエクスポートを推奨します。</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Survival Basics Tab -->
+    <section id="basics" class="tab-panel" role="tabpanel">
+      <h2>防災備蓄の基礎知識</h2>
+
+      <details class="card">
+        <summary>🧭 基本方針（在宅避難 vs 避難所避難）</summary>
+        <h4>📍 在宅避難（自宅籠城）が基本</h4>
+        <ul>
+          <li><strong>安全確保が最優先</strong>：建物倒壊・火災・津波の危険がなければ在宅避難が推奨</li>
+          <li><strong>プライバシー確保</strong>：避難所と比べて生活の質を維持できる</li>
+          <li><strong>感染症リスク低減</strong>：密集を避けられる</li>
+          <li><strong>ペット同伴可能</strong>：避難所では制限がある場合も</li>
+        </ul>
+        <h4>🏃 避難所へ行くべきケース</h4>
+        <ul>
+          <li>建物の倒壊・損傷リスクがある</li>
+          <li>火災・津波・土砂崩れの危険が迫っている</li>
+          <li>ライフライン（電気・ガス・水道）の復旧見込みが1ヶ月以上</li>
+          <li>医療・介護が必要で自宅では対応困難</li>
+          <li>真冬・真夏で空調なしでは生命の危険がある</li>
+        </ul>
+        <h4>🔄 ローリングストックの3原則</h4>
+        <ol>
+          <li><strong>日常使い</strong>：普段から食べ慣れたものを備蓄</li>
+          <li><strong>定期消費</strong>：期限が近いものから計画的に消費</li>
+          <li><strong>即補充</strong>：消費したらすぐに同量を買い足す</li>
+        </ol>
+      </details>
+
+      <details class="card">
+        <summary>📦 備蓄期間の考え方</summary>
+        <table class="info-table">
+          <thead>
+            <tr>
+              <th>期間</th>
+              <th>対象</th>
+              <th>備蓄の目的</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>3日分</strong></td>
+              <td>すべての家庭</td>
+              <td>最低限の生命維持。自治体の救援物資が届くまで</td>
+            </tr>
+            <tr>
+              <td><strong>7日分</strong></td>
+              <td>一般家庭の推奨</td>
+              <td>ライフライン復旧・物流正常化までの標準的期間</td>
+            </tr>
+            <tr>
+              <td><strong>14日分</strong></td>
+              <td>都市部・交通遮断リスク地域</td>
+              <td>大規模災害時の物流停止に対応</td>
+            </tr>
+            <tr>
+              <td><strong>1ヶ月分</strong></td>
+              <td>山間部・離島・プレッパー</td>
+              <td>孤立が長期化する可能性がある地域</td>
+            </tr>
+            <tr>
+              <td><strong>3〜6ヶ月分</strong></td>
+              <td>本格的プレッパー</td>
+              <td>大規模災害・パンデミック等の長期危機に備える</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="note">💡 <strong>地域特性を考慮</strong>：海沿い（津波）、山間部（土砂災害）、活断層付近（地震）など、リスクに応じて期間を調整</p>
+      </details>
+
+      <details class="card">
+        <summary>🔄 ローリングストックの実践方法</summary>
+        <h4>📅 月次サイクル</h4>
+        <ol>
+          <li><strong>月初（1日）</strong>：このツールで期限間近リストを確認</li>
+          <li><strong>週次（毎週日曜）</strong>：「今週消費」対象を1〜2品、日常食に組み込む</li>
+          <li><strong>買い物時</strong>：消費した分を必ず補充（同じもの or 類似品）</li>
+          <li><strong>月末（25日頃）</strong>：在庫の棚卸し・登録データの更新</li>
+        </ol>
+        <h4>🍱 具体例：カレーのローリングストック</h4>
+        <div class="example-box">
+          <p><strong>備蓄目標</strong>：レトルトカレー 14食分（家族4人 × 7日 ÷ 2食/日）</p>
+          <p><strong>実践</strong>：</p>
+          <ul>
+            <li>毎月2回、日曜の夕食でレトルトカレー（2〜3袋消費）</li>
+            <li>翌週の買い物で同量を補充</li>
+            <li>期限がもっとも早いものから消費（FIFO: First In, First Out）</li>
+          </ul>
+          <p class="success">✅ <strong>結果</strong>：常に新鮮な14食分を維持、廃棄ゼロ</p>
+        </div>
+        <h4>⚠️ よくある失敗と対策</h4>
+        <ul>
+          <li><strong>失敗</strong>：消費したのに買い忘れ → <strong>対策</strong>：買い物リストアプリに即登録</li>
+          <li><strong>失敗</strong>：同じものばかりで飽きる → <strong>対策</strong>：カレー・シチュー・中華など種類を分散</li>
+          <li><strong>失敗</strong>：期限管理が面倒 → <strong>対策</strong>：このツールで自動アラート</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>🏠 保管場所の工夫</summary>
+        <h4>📍 分散保管の原則</h4>
+        <ul>
+          <li><strong>1階と2階に分散</strong>：1階浸水でも2階で確保</li>
+          <li><strong>玄関近くに非常袋</strong>：即避難時の持ち出し用（3日分）</li>
+          <li><strong>寝室に懐中電灯・靴</strong>：夜間地震時の安全確保</li>
+          <li><strong>車のトランク</strong>：水・カロリーメイト・毛布（帰宅困難時用）</li>
+        </ul>
+        <h4>🌡️ 保管環境</h4>
+        <ul>
+          <li><strong>直射日光を避ける</strong>：劣化を防ぐため暗所・クローゼット内</li>
+          <li><strong>温度変化の少ない場所</strong>：押入れ・床下収納（ただし浸水リスクに注意）</li>
+          <li><strong>湿気対策</strong>：防水ケース・乾燥剤を活用</li>
+          <li><strong>ローテーション収納</strong>：新しいものは奥、古いものは手前</li>
+        </ul>
+        <h4>📦 収納テクニック</h4>
+        <ul>
+          <li><strong>透明ケース</strong>：中身が一目で分かる</li>
+          <li><strong>ラベル貼付</strong>：「期限：2025-06」「カテゴリ：主食」など明記</li>
+          <li><strong>カテゴリ別</strong>：水/主食/おかず/おやつで分ける</li>
+          <li><strong>重量物は下段</strong>：水・缶詰は下、軽いものは上</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>🍽️ 栄養バランスと食品選び</summary>
+        <h4>🥗 災害時の栄養3原則</h4>
+        <ol>
+          <li><strong>エネルギー確保</strong>：炭水化物（米・パン・麺）で最低1800kcal/日</li>
+          <li><strong>タンパク質補給</strong>：缶詰（ツナ・サバ）・豆類で筋肉維持</li>
+          <li><strong>ビタミン・ミネラル</strong>：野菜ジュース・フルーツ缶で不足を補う</li>
+        </ol>
+        <h4>📋 推奨食品リスト</h4>
+        <table class="info-table">
+          <thead>
+            <tr>
+              <th>カテゴリ</th>
+              <th>具体例</th>
+              <th>ポイント</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>主食</strong></td>
+              <td>アルファ米、パックご飯、乾麺、カロリーメイト</td>
+              <td>加熱不要 or 簡単調理</td>
+            </tr>
+            <tr>
+              <td><strong>おかず</strong></td>
+              <td>レトルトカレー、缶詰（ツナ・サバ・焼き鳥）</td>
+              <td>そのまま食べられる</td>
+            </tr>
+            <tr>
+              <td><strong>野菜</strong></td>
+              <td>野菜ジュース、トマト缶、コーン缶</td>
+              <td>ビタミン・食物繊維</td>
+            </tr>
+            <tr>
+              <td><strong>果物</strong></td>
+              <td>フルーツ缶、ドライフルーツ</td>
+              <td>ビタミンC・糖分</td>
+            </tr>
+            <tr>
+              <td><strong>菓子</strong></td>
+              <td>チョコレート、ビスケット、羊羹</td>
+              <td>高カロリー・長期保存</td>
+            </tr>
+            <tr>
+              <td><strong>調味料</strong></td>
+              <td>塩、砂糖、醤油、味噌</td>
+              <td>味付けで食欲維持</td>
+            </tr>
+          </tbody>
+        </table>
+        <h4>⚠️ 避けるべき食品</h4>
+        <ul>
+          <li>生鮮食品（すぐ腐敗）</li>
+          <li>冷凍食品（停電で解凍）</li>
+          <li>調理に時間がかかるもの（燃料・水の浪費）</li>
+          <li>匂いの強いもの（避難所では迷惑）</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>📅 賞味期限と消費期限の違い</summary>
+        <div class="comparison-box">
+          <div>
+            <h4>🟢 賞味期限（Best Before）</h4>
+            <p><strong>意味</strong>：美味しく食べられる期限</p>
+            <p><strong>対象</strong>：缶詰・レトルト・スナック菓子など</p>
+            <p><strong>期限後</strong>：すぐには食べられなくならない。風味は落ちるが、保存状態が良ければ数ヶ月〜1年は安全</p>
+            <p class="note">💡 <strong>目安</strong>：賞味期限切れ後も、開封前・変色なし・異臭なしなら食用可能（自己判断）</p>
+          </div>
+          <div>
+            <h4>🔴 消費期限（Use By）</h4>
+            <p><strong>意味</strong>：安全に食べられる期限</p>
+            <p><strong>対象</strong>：弁当・惣菜・生菓子など</p>
+            <p><strong>期限後</strong>：食中毒リスクあり。原則として廃棄</p>
+            <p class="warning">⚠️ <strong>厳守</strong>：消費期限切れの食品は備蓄に不向き</p>
+          </div>
+        </div>
+        <h4>📝 備蓄での扱い</h4>
+        <ul>
+          <li><strong>賞味期限の食品</strong>：ローリングストックの主力。期限前3〜6ヶ月で消費開始</li>
+          <li><strong>消費期限の食品</strong>：備蓄には不向き。避難袋にも入れない</li>
+          <li><strong>期限表示なし</strong>：塩・砂糖・ハチミツは実質無期限（湿気注意）</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>🔥 災害時の調理方法</summary>
+        <h4>🍳 加熱手段の優先順位</h4>
+        <ol>
+          <li><strong>カセットコンロ</strong>（推奨）：屋内使用可、ボンベ備蓄必須（1本=約60分）</li>
+          <li><strong>固形燃料</strong>：軽量・安全、一人鍋や湯沸かしに最適</li>
+          <li><strong>キャンプ用バーナー</strong>：屋外専用、火力強いが換気必須</li>
+          <li><strong>炭・薪</strong>：長期籠城向け、屋外のみ</li>
+        </ol>
+        <h4>💧 節水調理テクニック</h4>
+        <ul>
+          <li><strong>ポリ袋調理</strong>：食材を袋に入れて湯煎。水の再利用可能</li>
+          <li><strong>アルファ米</strong>：水だけで戻る（60分）、お湯なら15分</li>
+          <li><strong>缶詰そのまま</strong>：温めなくても食べられる</li>
+          <li><strong>ラップ活用</strong>：皿にラップを敷いて洗い物削減</li>
+        </ul>
+        <h4>🧊 冷蔵庫の活用（停電時）</h4>
+        <ul>
+          <li><strong>最初の24時間</strong>：開閉を最小限にすれば冷蔵可能</li>
+          <li><strong>冷凍食品</strong>：保冷剤代わりに冷蔵室へ移動</li>
+          <li><strong>腐りやすいもの優先</strong>：肉・魚→乳製品→野菜の順で消費</li>
+        </ul>
+        <h4>⚠️ 火災・一酸化炭素中毒に注意</h4>
+        <ul>
+          <li>屋内で炭・薪は絶対NG（一酸化炭素中毒）</li>
+          <li>カセットコンロも換気しながら使用</li>
+          <li>就寝時は火を完全消火</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>🐾 ペット同行避難の準備</summary>
+        <h4>📋 事前準備（平時）</h4>
+        <ul>
+          <li><strong>自治体の方針確認</strong>：避難所でのペット受け入れ可否を確認（自治体HPまたは電話）</li>
+          <li><strong>マイクロチップ装着</strong>：迷子対策（2022年6月から義務化）</li>
+          <li><strong>ワクチン接種</strong>：狂犬病・混合ワクチンを最新に</li>
+          <li><strong>ケージ訓練</strong>：普段からケージ・キャリーに慣れさせる</li>
+          <li><strong>人慣れ訓練</strong>：他人や他の動物に吠えない訓練</li>
+        </ul>
+        <h4>🎒 ペット用非常袋の中身</h4>
+        <ul class="checklist">
+          <li>フード（7日分以上）：普段食べているもの</li>
+          <li>水（ペットボトル）：犬1L/日、猫0.3L/日</li>
+          <li>食器（折りたたみ式が便利）</li>
+          <li>トイレシート・猫砂（1週間分）</li>
+          <li>リード・首輪（予備も）</li>
+          <li>キャリーバッグ・ケージ</li>
+          <li>常備薬・療法食（処方箋のコピー）</li>
+          <li>ペット手帳（ワクチン証明・既往歴）</li>
+          <li>写真（迷子捜索用、飼い主と一緒のもの）</li>
+          <li>ガムテープ（ケージ補修）</li>
+          <li>タオル・ブランケット</li>
+        </ul>
+        <h4>🏠 避難所でのマナー</h4>
+        <ul>
+          <li>ペットは原則ケージ内（他の避難者への配慮）</li>
+          <li>鳴き声・臭い対策を徹底</li>
+          <li>排泄物は飼い主が責任を持って処理</li>
+          <li>アレルギー持ちの避難者に配慮</li>
+        </ul>
+        <h4>🚗 車中避難も選択肢</h4>
+        <p>ペット不可の避難所の場合、車中泊も検討（エコノミークラス症候群に注意）</p>
+      </details>
+
+      <details class="card">
+        <summary>👶 子ども・高齢者への配慮</summary>
+        <h4>👶 乳幼児（0〜2歳）</h4>
+        <ul>
+          <li><strong>粉ミルク</strong>：液体ミルク（開封後すぐ使用）が便利</li>
+          <li><strong>離乳食</strong>：月齢に合わせたレトルト（7ヶ月用、12ヶ月用など）</li>
+          <li><strong>おむつ</strong>：1日5〜10枚 × 7日分 = 35〜70枚</li>
+          <li><strong>おしりふき</strong>：多めに備蓄（体も拭ける）</li>
+          <li><strong>哺乳瓶</strong>：使い捨てタイプが衛生的</li>
+        </ul>
+        <h4>🧒 子ども（3〜12歳）</h4>
+        <ul>
+          <li><strong>好きな食べ物</strong>：ストレス軽減のためお菓子も備蓄</li>
+          <li><strong>遊び道具</strong>：絵本・折り紙・トランプで退屈対策</li>
+          <li><strong>防災教育</strong>：避難訓練を家族でシミュレーション</li>
+          <li><strong>連絡先カード</strong>：名前・住所・親の電話番号を記入して常時携帯</li>
+        </ul>
+        <h4>👴 高齢者（65歳以上）</h4>
+        <ul>
+          <li><strong>常備薬</strong>：最低2週間分（処方箋のコピーも）</li>
+          <li><strong>やわらかい食品</strong>：おかゆ・ゼリー飲料（嚥下機能低下に対応）</li>
+          <li><strong>入れ歯洗浄剤</strong>：口腔衛生維持</li>
+          <li><strong>杖・補聴器の予備電池</strong></li>
+          <li><strong>介護用品</strong>：大人用おむつ・防水シーツ</li>
+          <li><strong>お薬手帳</strong>：既往歴・アレルギー情報</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>🌦️ 季節別の注意点</summary>
+        <h4>❄️ 冬季（12〜2月）</h4>
+        <ul>
+          <li><strong>防寒対策</strong>：カイロ・毛布・寝袋・防寒着を備蓄</li>
+          <li><strong>暖房器具</strong>：石油ストーブ（電気不要タイプ）・灯油備蓄</li>
+          <li><strong>高カロリー食</strong>：体温維持のためカロリー摂取量増</li>
+          <li><strong>凍結対策</strong>：屋外の水は凍るため屋内保管</li>
+        </ul>
+        <h4>☀️ 夏季（6〜8月）</h4>
+        <ul>
+          <li><strong>熱中症対策</strong>：スポーツドリンク・塩飴・冷却シート</li>
+          <li><strong>水分量増</strong>：通常の1.5倍の水を備蓄</li>
+          <li><strong>腐敗注意</strong>：停電時、食品が早く傷む</li>
+          <li><strong>虫対策</strong>：蚊取り線香・虫除けスプレー</li>
+        </ul>
+        <h4>🌸 春・秋</h4>
+        <ul>
+          <li><strong>花粉症対策</strong>：マスク・目薬・抗アレルギー薬</li>
+          <li><strong>台風対策</strong>：窓ガラス養生・雨具</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>⚖️ 倫理的ジレンマ Q&A</summary>
+        <h4>Q：隣人に食料を求められたら？</h4>
+        <p><strong>基本</strong>：まず自分と家族の生命維持を優先。ただし地域の連携が生死を分ける場合も。</p>
+        <p><strong>中間策の例</strong>：</p>
+        <ul>
+          <li>食料そのものではなく、「調理済みの1食分」を提供</li>
+          <li>共同調理で燃料・水を節約しながらシェア</li>
+          <li>情報（給水場所・避難所の状況）を共有</li>
+          <li>「我が家も3日分しかない」と正直に伝え、一緒に避難所へ</li>
+        </ul>
+        <p><strong>有効策</strong>：備蓄場所を分散化する。「もうほとんどない」と断っても強引に「備蓄場所を見せろ」といってくる可能性があるため。見せることを想定した備蓄部屋があれば、そんなときでも納得させられる。備蓄品で余裕があってもそれを表に出さない。食料を隠れて食べること。</p>
+        <p class="warning">⚠️ <strong>注意</strong>：「無限にある」と思われると、次々に頼られる可能性。「子ども・病人・高齢者がいるから」とねだられ続ける。助けるとその噂が広まり、別の家族からも要求される。適切な境界設定を。</p>
+
+        <h4>Q：避難所でペットはどうする？</h4>
+        <p><strong>事前準備</strong>：</p>
+        <ul>
+          <li>自治体HP・防災マップで「ペット同行避難可」の避難所を確認</li>
+          <li>マイクロチップ装着・ワクチン接種を済ませる</li>
+          <li>ケージ訓練・人慣れ訓練を日常的に実施</li>
+        </ul>
+        <p><strong>受け入れ不可の場合</strong>：</p>
+        <ul>
+          <li>車中避難（エコノミークラス症候群に注意）</li>
+          <li>ペット可の避難所を遠方でも探す</li>
+          <li>知人・親戚に一時預かり依頼</li>
+        </ul>
+
+        <h4>Q：何日分を備えるべき？</h4>
+        <p><strong>最低ライン</strong>：3日分（すべての家庭）</p>
+        <p><strong>推奨ライン</strong>：7〜14日分（一般家庭）</p>
+        <p><strong>地域リスク別</strong>：</p>
+        <ul>
+          <li>都市部：7日分（物流は比較的早く復旧）</li>
+          <li>郊外・地方都市：14日分（幹線道路の寸断リスク）</li>
+          <li>山間部・離島：1ヶ月分（孤立の長期化）</li>
+          <li>プレッパー：3〜6ヶ月分（パンデミック・大規模災害対応）</li>
+        </ul>
+
+        <h4>Q：備蓄を無駄にしたくない</h4>
+        <p><strong>解決策</strong>：ローリングストック方式</p>
+        <ul>
+          <li>普段から食べる → 備蓄が日常の延長に</li>
+          <li>期限管理をこのツールで自動化 → 廃棄ゼロ</li>
+          <li>「特別な非常食」ではなく「日常食の延長」と考える</li>
+        </ul>
+        <p class="success">✅ <strong>実績</strong>：適切なローリングストックで廃棄率1%未満を達成可能</p>
+      </details>
+
+      <details class="card">
+        <summary>📝 このツールの使い方のコツ</summary>
+        <ul>
+          <li><strong>カロリー登録</strong>：在庫登録時に「カロリー」を入れておくと、充足率の算出精度が向上</li>
+          <li><strong>水の登録</strong>：「数量 × 単位 L」で合計。例：2Lボトル6本なら <code>数量=6, 単位=L</code></li>
+          <li><strong>医薬品の期限</strong>：使用期限も必ず登録。アラート対象に含まれる</li>
+          <li><strong>家族構成の更新</strong>：家族が増減したら、必ず「家族構成」タブで再計算→保存</li>
+          <li><strong>定期エクスポート</strong>：月1回データをエクスポートしてバックアップ</li>
+          <li><strong>スマホ活用</strong>：買い物先でこのツールを開き、在庫確認・補充漏れ防止</li>
+        </ul>
+      </details>
+
+      <details class="card">
+        <summary>❌ よくある失敗例と対策</summary>
+        <div class="failure-box">
+          <h4>❌ 失敗1：備蓄したまま期限切れ</h4>
+          <p><strong>原因</strong>：「非常食」として別扱いし、日常で食べない</p>
+          <p class="solution">✅ <strong>対策</strong>：ローリングストック方式。普段から食べるものを備蓄</p>
+        </div>
+        <div class="failure-box">
+          <h4>❌ 失敗2：水だけ大量、食料が少ない</h4>
+          <p><strong>原因</strong>：「水が最優先」と聞いて水ばかり買う</p>
+          <p class="solution">✅ <strong>対策</strong>：このツールで水・カロリー両方の充足率を確認</p>
+        </div>
+        <div class="failure-box">
+          <h4>❌ 失敗3：缶切りがない</h4>
+          <p><strong>原因</strong>：缶詰は買ったが開ける道具を忘れる</p>
+          <p class="solution">✅ <strong>対策</strong>：プルトップ缶 or 多目的ナイフを備蓄</p>
+        </div>
+        <div class="failure-box">
+          <h4>❌ 失敗4：家族が食べられないものを備蓄</h4>
+          <p><strong>原因</strong>：「栄養価が高い」だけで選び、好みを無視</p>
+          <p class="solution">✅ <strong>対策</strong>：試食してから備蓄。子どもの好き嫌いも考慮</p>
+        </div>
+        <div class="failure-box">
+          <h4>❌ 失敗5：保管場所が浸水リスク地域</h4>
+          <p><strong>原因</strong>：1階・床下収納に全備蓄を集中</p>
+          <p class="solution">✅ <strong>対策</strong>：1階と2階に分散保管</p>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer">
+      🔗 GitHubリポジトリはこちら（ <a href="https://github.com/ipusiron/rollingstock-planner" target="_blank" rel="noopener">ipusiron/rollingstock-planner</a> ）
+    </div>
+  </footer>
+
+  <!-- Item Form Modal -->
+  <div id="itemModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">アイテム追加</h2>
+        <button class="modal-close" id="modalClose" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="itemForm">
+          <div class="grid">
+            <div>
+              <label>品名<span class="req">*</span></label>
+              <input type="text" id="name" required placeholder="例: 2Lペットボトル水 / ツナ缶" />
+            </div>
+            <div>
+              <label>カテゴリ</label>
+              <select id="category">
+                <option value="food">食料</option>
+                <option value="water">水</option>
+                <option value="medicine">医薬品</option>
+                <option value="pet-food">ペットフード</option>
+                <option value="daily">生活用品</option>
+                <option value="tool">ツール</option>
+                <option value="other">その他</option>
+              </select>
+            </div>
+            <div>
+              <label>数量<span class="req">*</span>
+                <span class="help-icon" data-tooltip="在庫の個数や容量を入力します。2Lペットボトル6本なら「6」と入力し、単位に「L」または「本」を入力してください。">?</span>
+              </label>
+              <input type="number" id="quantity" min="0" step="0.01" required value="1" />
+            </div>
+            <div>
+              <label>単位
+                <span class="help-icon" data-tooltip="数量の単位を記入します（例：個、缶、袋、L、本、箱）。水の場合「L」にすると自動で水の在庫として計算されます。">?</span>
+              </label>
+              <input type="text" id="unit" list="unitPresets" placeholder="選択または入力" />
+              <datalist id="unitPresets">
+                <option value="個">個</option>
+                <option value="缶">缶</option>
+                <option value="袋">袋</option>
+                <option value="本">本</option>
+                <option value="箱">箱</option>
+                <option value="L">L（リットル）</option>
+                <option value="ml">ml</option>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="パック">パック</option>
+                <option value="セット">セット</option>
+              </datalist>
+            </div>
+            <div>
+              <label>賞味/使用期限
+                <span class="help-icon" data-tooltip="食品の賞味期限や医薬品の使用期限を入力します。期限が近づくと自動で警告を表示します。">?</span>
+              </label>
+              <div class="expiry-input-group">
+                <input type="date" id="expiry" />
+                <div class="expiry-button-row">
+                  <button type="button" class="btn-small" id="expiryReset">リセット</button>
+                  <button type="button" class="btn-small" id="expiryNone">なし</button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label>カロリー（1単位あたり, kcal）
+                <span class="help-icon" data-tooltip="食品1個あたりのカロリーを入力すると、家族の必要カロリーに対する充足率を自動計算します。缶詰やレトルト食品のパッケージに記載されています。">?</span>
+              </label>
+              <input type="number" id="kcal" min="0" step="1" placeholder="食品のみ任意" />
+            </div>
+          </div>
+          <div class="right">
+            <button type="submit" class="btn primary">保存</button>
+            <button type="button" id="cancelEdit" class="btn">キャンセル</button>
+          </div>
+          <input type="hidden" id="editIndex" />
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
