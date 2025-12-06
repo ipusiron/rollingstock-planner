@@ -1,11 +1,46 @@
 <!--
 ---
-title: RollingStock Planner
-category: survival
+id: day096
+slug: rollingstock-planner
+
+title: "RollingStock Planner"
+
+subtitle_ja: "防災備蓄管理ツール"
+subtitle_en: "Disaster Preparedness Stock Management Tool"
+
+description_ja: "ローリングストック方式に完全特化した防災備蓄管理ツール。家族構成（人間+ペット）から必要量を自動計算し、4段階の期限アラートで食品ロスを防止。AI防災アドバイザーによる総合分析、13セクションの防災教育コンテンツを搭載。3日〜半年の備蓄計画に対応し、完全ブラウザー完結型でプライバシーを保護。"
+description_en: "A disaster preparedness tool specialized in rolling stock method. Auto-calculates water/calorie needs based on family composition (humans + pets), with 4-stage expiration alerts to minimize food waste. Features AI disaster advisor for comprehensive analysis and 13-section educational content. Supports 3-day to 6-month stockpiling, 100% browser-based for privacy protection."
+
+category_ja:
+  - サバイバル
+  - 防災
+  - プレッパー
+category_en:
+  - Survival
+  - Disaster Preparedness
+  - Prepper
+
 difficulty: 2
-description: AI-powered rolling-stock disaster preparedness tool with family-based auto-calculation, 4-stage expiration alerts, and expert analysis. Features 13-section educational content, dark/light themes, XSS protection, and comprehensive data validation. Supports 3-day to 6-month stockpiling for humans and pets. 100% browser-based, privacy-first, open-source.
-tags: [disaster-preparedness, survival, stock-management, rolling-stock, ai-advisor, javascript, education, prepper, dark-mode, security]
-demo: https://ipusiron.github.io/rollingstock-planner/
+
+tags:
+  - disaster-preparedness
+  - survival
+  - stock-management
+  - rolling-stock
+  - ai-advisor
+  - javascript
+  - education
+  - prepper
+  - dark-mode
+  - security
+  - xss-protection
+  - localstorage
+  - chart-js
+
+repo_url: "https://github.com/ipusiron/rollingstock-planner"
+demo_url: "https://ipusiron.github.io/rollingstock-planner/"
+
+hub: true
 ---
 -->
 

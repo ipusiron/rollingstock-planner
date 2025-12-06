@@ -8,53 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Live Demo**: https://ipusiron.github.io/rollingstock-planner/
 - **Category**: Survival / Disaster Preparedness Tool
-- **Part of**: "生成AIで作るセキュリティツール100" (100 Security Tools with Generative AI) - Day 096
+- **Part of**: "100 Security Tools with Generative AI" (Day 096)
 
 ## Tech Stack
 
 - **Frontend**: Vanilla JavaScript (no framework), HTML5, CSS3
 - **Data Storage**: Browser LocalStorage
-- **Charts**: Chart.js (loaded via CDN)
+- **Charts**: Chart.js 4.4.1 (CDN)
 - **Deployment**: GitHub Pages (static site)
-
-## Architecture
-
-### Data Model
-
-All data is stored in LocalStorage with these keys:
-
-- `rsp_items` (JSON array): Stock items with fields: `name`, `category`, `quantity`, `unit`, `expiry`, `kcal`, `createdAt`
-- `rsp_family` (JSON object): Family composition: `adults`, `children`, `seniors`, `dogs`, `cats`, `days`
-- `rsp_alert_months` (string): Warning threshold in months (default: 2)
-
-### Core Modules (script.js)
-
-1. **State Management** (lines 12-17): In-memory state synchronized with LocalStorage
-2. **Data Persistence** (lines 24-28): `loadJSON()` and `saveJSON()` helpers
-3. **Date Utilities** (lines 30-48): Date parsing, formatting, and difference calculations
-4. **Tab Navigation** (lines 60-71): Client-side tab switching with chart refresh triggers
-5. **Stock Management** (lines 84-155): CRUD operations for inventory items
-6. **Calculations** (lines 193-226):
-   - `calcTotals()`: Aggregates water (in L) and calories from all items
-   - `calcNeeds()`: Calculates required water/calories based on family composition
-   - `coverage()`: Computes sufficiency percentages
-7. **Rendering** (lines 231-325): Table with filtering, sorting, and status badges
-8. **Alerts** (lines 346-398): Expiry warnings and rolling-stock suggestions
-9. **Charts** (lines 404-458): Category breakdown (doughnut), coverage (bar charts)
-
-### UI Tabs (index.html)
-
-1. **Stock**: Item registration, search/sort, import/export JSON, category chart
-2. **Family Setup**: Configure household members and pets to auto-calculate needs
-3. **Alerts & Suggestions**: Expiry warnings, consumption recommendations, coverage charts
-4. **Survival Basics**: Educational content (checklist, ethical dilemmas, best practices)
-
-### Key Calculation Logic
-
-- **Water needs**: Adults 4L/day, Children 2L/day, Seniors 3L/day, Dogs 1L/day, Cats 0.3L/day
-- **Calorie needs**: Adults 2000kcal/day, Children 1400kcal/day, Seniors 1800kcal/day
-- **Expiry alerts**: Items within `alertMonths` threshold get "要消費" badge; expired items get "期限切れ"
-- **Rolling stock list**: Items expiring within 14 days recommended for consumption
 
 ## Development Workflow
 
@@ -70,101 +31,134 @@ Or use a local server:
 
 ```bash
 python -m http.server 8000
-# then visit http://localhost:8000
 ```
 
 ### Deployment
 
 Push to `main` branch. GitHub Pages automatically serves from root directory.
 
+## Architecture
+
+### Data Model (LocalStorage Keys)
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `rsp_items` | JSON array | Stock items: `{name, category, quantity, unit, expiry, kcal, createdAt}` |
+| `rsp_family` | JSON object | Family composition: `{adults, children, seniors, dogs, cats, days}` |
+| `rsp_alert_months` | string | Warning threshold in months (default: "2") |
+| `rsp_theme` | string | Theme setting ("dark" or "light") |
+
+### Core Application Flow (script.js)
+
+1. **State Management**: In-memory state (`items`, `family`, `alertMonths`) synchronized with LocalStorage
+2. **Data Validation**: All LocalStorage data validated on load via `validateItems()`, `validateFamily()`, `validateAlertMonths()`
+3. **Tab Navigation**: Client-side tab switching; charts redraw on visibility
+4. **Modal Pattern**: `openModal(mode, itemIndex)` / `closeModal()` for item CRUD
+5. **Rendering Pipeline**: `renderAll()` → `renderTable()` + `renderAlerts()` → Charts update
+
+### UI Tabs (5 total)
+
+1. **Stock (在庫管理)**: Item registration, search/sort, import/export, category chart
+2. **Family (家族構成)**: Household members + pets, auto-calculate needs
+3. **Alerts (アラート・提案)**: Expiry warnings, rolling-stock suggestions, coverage charts, AI advisor
+4. **Settings (システム設定)**: Alert threshold, data import/export, clear all
+5. **Basics (基礎知識)**: 13-section educational content (accordion format)
+
+### Key Calculation Logic
+
+**Water needs (per day):**
+- Adults: 4L | Children: 2L | Seniors: 3L | Dogs: 1L | Cats: 0.3L
+
+**Calorie needs (per day):**
+- Adults: 2000kcal | Children: 1400kcal | Seniors: 1800kcal
+
+**Expiry status (4 levels):**
+- `期限切れ` (red): Past expiry date
+- `本日期限` (orange): Expires today
+- `要消費` (yellow): Within `alertMonths` threshold
+- `OK` (green): Beyond threshold
+
+**Rolling stock list**: Items expiring within 14 days
+
+### Water Detection Logic
+
+Items counted as water if:
+- `category === 'water'` OR
+- `unit.toLowerCase()` is `'l'` or `'ℓ'`
+
 ## Code Conventions
 
 - **Japanese UI**: All labels, messages, and content are in Japanese
 - **Category codes**: `food`, `water`, `medicine`, `pet-food`, `daily`, `tool`, `other`
-- **Date format**: ISO 8601 (`YYYY-MM-DD`) for storage and input[type="date"]
-- **No dependencies**: Pure JavaScript (except Chart.js CDN)
-- **LocalStorage only**: No backend, no API calls
+- **Date format**: ISO 8601 (`YYYY-MM-DD`) for storage and `input[type="date"]`
+- **No dependencies**: Pure JavaScript except Chart.js CDN
 
 ## Important Behaviors
 
-- Water detection: Items with `category='water'` OR `unit='L'/'ℓ'` are counted as water
-- Calorie calculation: Only items with non-null `kcal` field contribute to total
-- Edit mode: Clicking "編集" populates form with existing item data; `editIndex` hidden field tracks which item
-- Import/Export: JSON format includes `meta`, `items`, `family`, `alertMonths` fields
-- Chart updates: Charts redraw on tab activation (visibility check) and data changes
-- Theme toggle: Persists in LocalStorage (`rsp_theme`), defaults to 'dark'
-- Tooltips: Desktop = hover, Mobile = tap to toggle
+- **Edit mode**: `openModal('edit', itemIndex)` populates form; `#editIndex` hidden field tracks which item
+- **Import/Export**: JSON format includes `{meta, items, family, alertMonths}`
+- **Chart updates**: Charts redraw on tab activation and data changes
+- **Theme toggle**: Persists in LocalStorage, defaults to 'dark'
+- **Tooltips**: Desktop = hover, Mobile = tap to toggle (via `.help-icon.active` class)
+- **Pagination**: 50 items per page, `currentPage` resets on search
 
 ## Chart.js Configuration
 
 **Critical**: All charts must be wrapped in `.chart-container` divs with fixed heights to prevent infinite scroll bugs.
 
 ```html
-<!-- Correct structure -->
 <div class="chart-container small">
   <canvas id="categoryChart"></canvas>
 </div>
 ```
 
-Chart options must use:
+Required options:
 - `responsive: true`
 - `maintainAspectRatio: true` (NOT false!)
 - `aspectRatio`: explicit value (1 for doughnut, 1.5 for bar)
-- Proper destroy: `chart.destroy(); chart = null;`
+- Proper destroy before recreate: `chart.destroy(); chart = null;`
 
 Heights:
-- `.chart-container`: 200px (default for bar charts)
-- `.chart-container.small`: 140px (for doughnut chart)
+- `.chart-container`: 200px (bar charts)
+- `.chart-container.small`: 140px (doughnut chart)
 
 ## Security Measures
 
 ### XSS Prevention
-- All user inputs are escaped with `escapeHtml()` before rendering
-- Category values are validated against whitelist before use as CSS classes
-- Input length limits: name (200 chars), unit (50 chars), expiry (20 chars)
+- All user inputs escaped with `escapeHtml()` before rendering
+- Category values validated against whitelist before use as CSS classes
+- Input length limits: name (200), unit (50), expiry (20)
 
 ### Input Validation
-- **Category**: Restricted to 7 allowed values (`food`, `water`, `medicine`, `pet-food`, `daily`, `tool`, `other`)
-- **Quantity/Kcal**: Non-negative numbers only via `Math.max(0, ...)`
+- **Category**: Restricted to 7 allowed values
+- **Quantity/Kcal**: Non-negative numbers via `Math.max(0, ...)`
 - **Family members**: Capped at 0-100 per type
-- **Days**: Restricted to [3, 7, 14, 30, 180]
-- **Alert months**: Restricted to [1, 2, 3, 6]
+- **Days**: Restricted to `[3, 7, 14, 30, 180]`
+- **Alert months**: Restricted to `[1, 2, 3, 6]`
 
 ### Import Security
 - File size limit: 10MB
-- All imported data is validated and sanitized
-- Invalid items are filtered out
-- Categories normalized to whitelist
-- Numeric values clamped to safe ranges
-
-### LocalStorage Safety
-- All data loaded from LocalStorage is validated on startup via:
-  - `validateItems()`: Sanitizes and filters item array
-  - `validateFamily()`: Clamps family member counts
-  - `validateAlertMonths()`: Ensures valid threshold
-- Malformed data falls back to safe defaults
-
-### CDN Security
-- Chart.js version pinned to `4.4.1`
-- `crossorigin="anonymous"` prevents credential leakage
-- Consider adding SRI hash for production
+- All imported data validated and sanitized
+- Invalid items filtered out, categories normalized
 
 ### HTTP Headers (meta tags)
-- `X-Content-Type-Options: nosniff` - Prevents MIME sniffing
-- `X-Frame-Options: DENY` - Prevents clickjacking
-- `referrer: strict-origin-when-cross-origin` - Limits referrer leakage
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `referrer: strict-origin-when-cross-origin`
 
 ## File Structure
 
 ```
 rollingstock-planner/
-├── index.html          # Single-page app structure
-├── script.js           # All application logic
-├── style.css           # Dark theme, responsive layout
-├── assets/             # Images (favicon, screenshot)
-├── README.md           # Project documentation (Japanese)
-├── CLAUDE.md           # Development guide (this file)
-├── LICENSE             # MIT License
-├── .nojekyll           # GitHub Pages config
-└── .gitignore          # Standard git ignores
+├── index.html      # Single-page app (807 lines, 5 tab panels + modal)
+├── script.js       # All application logic (~1150 lines)
+├── style.css       # Dark/light theme, responsive layout
+├── assets/         # Images (favicon, screenshot)
+├── README.md       # Project documentation (Japanese)
+├── TECHNICAL.md    # Detailed implementation docs (Japanese)
+└── CLAUDE.md       # This file
 ```
+
+## Additional Documentation
+
+For detailed implementation information including algorithm explanations, security design rationale, and performance optimizations, see **TECHNICAL.md**.
