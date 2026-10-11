@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Frontend**: Vanilla JavaScript (no framework), HTML5, CSS3
 - **Data Storage**: Browser LocalStorage
-- **Charts**: Chart.js 4.4.1 (CDN)
+- **Displays**: Native HTML lists and progress elements; no runtime dependencies
 - **Deployment**: GitHub Pages (static site)
 
 ## Development Workflow
@@ -33,130 +33,126 @@ Or use a local server:
 python -m http.server 8000
 ```
 
+Run `npm test` with Node.js 22; no package installation is required.
+
 ### Deployment
 
-Push to `main` branch. GitHub Pages automatically serves from root directory.
+Use a feature branch and pull request. Both push and pull_request Test runs must succeed before an ordinary merge. GitHub Pages serves main/root. Verify main CI, Pages deployment, published hashes and browser behavior before cleanup.
 
 ## Architecture
 
 ### Data Model (LocalStorage Keys)
 
 | Key | Type | Description |
-|-----|------|-------------|
-| `rsp_items` | JSON array | Stock items: `{name, category, quantity, unit, expiry, kcal, createdAt}` |
-| `rsp_family` | JSON object | Family composition: `{adults, children, seniors, dogs, cats, days}` |
-| `rsp_alert_months` | string | Warning threshold in months (default: "2") |
-| `rsp_theme` | string | Theme setting ("dark" or "light") |
+|---|---|---|
+| rsp_state_v2 | JSON object | Atomic envelope: meta {app, ver:2}, items, family, alertMonths |
+| rsp_items | JSON array | Read-only compatibility source, preserved unchanged |
+| rsp_family | JSON object | Read-only compatibility source, preserved unchanged |
+| rsp_alert_months | string | Read-only compatibility source, preserved unchanged |
+| rsp_theme | string | light or dark, independent optional preference |
 
-### Core Application Flow (script.js)
+Items contain name, category, quantity, unit, expiry, kcal and createdAt.
+Family contains adults, children, seniors, dogs, cats, days, waterPerPerson,
+adultKcal, childKcal, seniorKcal, dogWater and catWater.
 
-1. **State Management**: In-memory state (`items`, `family`, `alertMonths`) synchronized with LocalStorage
-2. **Data Validation**: All LocalStorage data validated on load via `validateItems()`, `validateFamily()`, `validateAlertMonths()`
-3. **Tab Navigation**: Client-side tab switching; charts redraw on visibility
-4. **Modal Pattern**: `openModal(mode, itemIndex)` / `closeModal()` for item CRUD
-5. **Rendering Pipeline**: `renderAll()` → `renderTable()` + `renderAlerts()` → Charts update
+### Core Application Flow
+
+1. StockCore validates dates, finite numeric values, complete items and state.
+2. StockStore loads without writing. Corrupt current data must not silently fall back to compatibility keys.
+3. commitState saves a validated candidate before replacing in-memory state.
+4. Conflicts and storage errors preserve the confirmed state and user input.
+5. renderAll updates the table, totals, alerts and coverage even when items is empty.
+6. refreshDay refreshes derived date-dependent output on day changes.
 
 ### UI Tabs (5 total)
 
-1. **Stock (在庫管理)**: Item registration, search/sort, import/export, category chart
+1. **Stock (在庫管理)**: Item registration, search/sort, import/export, category row counts
 2. **Family (家族構成)**: Household members + pets, auto-calculate needs
-3. **Alerts (アラート・提案)**: Expiry warnings, rolling-stock suggestions, coverage charts, AI advisor
+3. **Alerts (アラート・提案)**: Expiry warnings, rolling-stock suggestions, separate water/food coverage, deterministic stock check
 4. **Settings (システム設定)**: Alert threshold, data import/export, clear all
 5. **Basics (基礎知識)**: 13-section educational content (accordion format)
 
 ### Key Calculation Logic
 
-**Water needs (per day):**
-- Adults: 4L | Children: 2L | Seniors: 3L | Dogs: 1L | Cats: 0.3L
+- Water: category water AND unit L/ℓ or mL (case insensitive); mL is divided by 1000. Never infer bottle or box volume.
+- Human calories: category food only, quantity multiplied by kcal per unit.
+- Ledger totals include dated and undated records. Planned totals exclude expired and undated records.
+- Zero quantity is valid but excluded from totals, alert lists and category counts.
+- Human water default: 3 L/person/day for drinking and cooking, excluding sanitation water.
+- Calorie defaults (2000/1400/1800) are editable examples, not individual nutrition standards.
+- Pet water starts null; a relevant null prevents a complete water target and ratio.
+- Pet-food requirements are not calculated.
+- A zero or unknown target produces null metrics, never a passing score.
+- Compute achievement before rounding; no average grade combining water and food.
+- Category counts are rows, not nutrition or mixed-unit quantities.
 
-**Calorie needs (per day):**
-- Adults: 2000kcal | Children: 1400kcal | Seniors: 1800kcal
+### Calendar Dates
 
-**Expiry status (4 levels):**
-- `期限切れ` (red): Past expiry date
-- `本日期限` (orange): Expires today
-- `要消費` (yellow): Within `alertMonths` threshold
-- `OK` (green): Beyond threshold
-
-**Rolling stock list**: Items expiring within 14 days
-
-### Water Detection Logic
-
-Items counted as water if:
-- `category === 'water'` OR
-- `unit.toLowerCase()` is `'l'` or `'ℓ'`
+Use strict YYYY-MM-DD validation and calendar day numbers, not elapsed local milliseconds across DST.
+Month addition clamps to the destination month end.
+Expiry states: expired, today, near, later, unknown.
+Rolling candidates: food/water/pet-food, positive quantity, today through day +14 inclusive.
+Dates do not establish food safety. Never recommend consuming expired food or medicine.
 
 ## Code Conventions
 
 - **Japanese UI**: All labels, messages, and content are in Japanese
 - **Category codes**: `food`, `water`, `medicine`, `pet-food`, `daily`, `tool`, `other`
 - **Date format**: ISO 8601 (`YYYY-MM-DD`) for storage and `input[type="date"]`
-- **No dependencies**: Pure JavaScript except Chart.js CDN
+- **No dependencies**: Browser scripts and Node.js standard test runner only
 
 ## Important Behaviors
 
-- **Edit mode**: `openModal('edit', itemIndex)` populates form; `#editIndex` hidden field tracks which item
-- **Import/Export**: JSON format includes `{meta, items, family, alertMonths}`
-- **Chart updates**: Charts redraw on tab activation and data changes
-- **Theme toggle**: Persists in LocalStorage, defaults to 'dark'
-- **Tooltips**: Desktop = hover, Mobile = tap to toggle (via `.help-icon.active` class)
-- **Pagination**: 50 items per page, `currentPage` resets on search
-
-## Chart.js Configuration
-
-**Critical**: All charts must be wrapped in `.chart-container` divs with fixed heights to prevent infinite scroll bugs.
-
-```html
-<div class="chart-container small">
-  <canvas id="categoryChart"></canvas>
-</div>
-```
-
-Required options:
-- `responsive: true`
-- `maintainAspectRatio: true` (NOT false!)
-- `aspectRatio`: explicit value (1 for doughnut, 1.5 for bar)
-- Proper destroy before recreate: `chart.destroy(); chart = null;`
-
-Heights:
-- `.chart-container`: 200px (bar charts)
-- `.chart-container.small`: 140px (doughnut chart)
+- Edit mode uses openModal('edit', itemIndex); save failures leave the dialog and inputs intact.
+- Import replaces the entire state only after full validation, confirmation and successful persistence.
+- Import limit: 10 MiB and 5000 rows. Reject any invalid row instead of dropping it.
+- Theme default is light, applied before CSS by theme-init.js.
+- Help uses a native popover; Escape closes it before the item dialog.
+- Tabs support arrows/Home/End; modal focus is trapped and restored; background is inert.
+- Pagination is 50 rows; search resets currentPage.
+- Explicit temporary-session mode never pretends data is persisted.
+- Recovery JSON contains original raw values and is not a normal import file.
+- Multi-tab snapshots detect changed data but are not a cross-tab transaction lock.
+- No network requests, AI service, push notifications, authentication or encryption are implemented.
 
 ## Security Measures
 
 ### XSS Prevention
 - All user inputs escaped with `escapeHtml()` before rendering
 - Category values validated against whitelist before use as CSS classes
-- Input length limits: name (200), unit (50), expiry (20)
+- Input length limits: name (200), unit (50), expiry (strict YYYY-MM-DD)
 
 ### Input Validation
-- **Category**: Restricted to 7 allowed values
-- **Quantity/Kcal**: Non-negative numbers via `Math.max(0, ...)`
-- **Family members**: Capped at 0-100 per type
-- **Days**: Restricted to `[3, 7, 14, 30, 180]`
-- **Alert months**: Restricted to `[1, 2, 3, 6]`
 
-### Import Security
-- File size limit: 10MB
-- All imported data validated and sanitized
-- Invalid items filtered out, categories normalized
+Core validation is authoritative, including import and storage reads.
+Reject non-finite or negative numbers, nonexistent dates, unsupported category/version, incomplete objects and out-of-range values.
+Do not clamp values, truncate strings or silently remove rows.
+See TECHNICAL.md for exact limits.
 
-### HTTP Headers (meta tags)
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `referrer: strict-origin-when-cross-origin`
+### Browser Security
+
+Meta CSP permits local scripts and styles, denies external connections, objects and form submissions.
+Use textContent or escapeHtml for user data; categories used as classes must be validated.
+Do not claim X-Frame-Options, frame-ancestors or X-Content-Type-Options work through meta tags.
+Do not store private data in fixtures, screenshots or example JSON.
 
 ## File Structure
 
 ```
 rollingstock-planner/
-├── index.html      # Single-page app (807 lines, 5 tab panels + modal)
-├── script.js       # All application logic (~1150 lines)
-├── style.css       # Dark/light theme, responsive layout
-├── assets/         # Images (favicon, screenshot)
-├── README.md       # Project documentation (Japanese)
-├── TECHNICAL.md    # Detailed implementation docs (Japanese)
-└── CLAUDE.md       # This file
+├── index.html        # Five tabs, dialog and educational content
+├── script.js         # UI events and rendering
+├── stock-core.js     # Pure calculations, calendar dates and validation
+├── stock-store.js    # Persistence, conflicts and recovery
+├── theme-init.js     # Early optional theme preference
+├── style.css         # Light/dark, mobile-first layout
+├── package.json      # Dependency-free npm test
+├── test/             # Core, storage, UI and documentation tests
+├── .github/workflows/test.yml
+├── assets/           # Documentation screenshots
+├── README.md         # Usage and limitations
+├── TECHNICAL.md      # Implementation reference
+└── CLAUDE.md         # This guide
 ```
 
 ## Additional Documentation

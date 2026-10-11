@@ -8,11 +8,11 @@
 
 1. [アーキテクチャ概要](#アーキテクチャ概要)
 2. [セキュリティ実装](#セキュリティ実装)
-3. [4段階期限判定アルゴリズム](#4段階期限判定アルゴリズム)
-4. [AI防災アドバイザーのスコアリング](#ai防災アドバイザーのスコアリング)
+3. [期限判定アルゴリズム](#期限判定アルゴリズム)
+4. [備蓄チェックの判定](#備蓄チェックの判定)
 5. [必要量計算ロジック](#必要量計算ロジック)
-6. [テーマシステムとChart.js統合](#テーマシステムとchartjs統合)
-7. [レスポンシブツールチップ実装](#レスポンシブツールチップ実装)
+6. [テーマと数値の表示](#テーマと数値の表示)
+7. [ヘルプとキーボード操作](#ヘルプとキーボード操作)
 8. [データ永続化と検証](#データ永続化と検証)
 9. [ページネーション実装](#ページネーション実装)
 10. [パフォーマンス最適化](#パフォーマンス最適化)
@@ -23,40 +23,33 @@
 
 ### 技術スタック
 
-- **フロントエンド**: Vanilla JavaScript（フレームワーク不使用）
-- **データ永続化**: LocalStorage
-- **グラフ描画**: Chart.js 3.x
-- **スタイリング**: CSS3（CSS Variables + メディアクエリ）
-- **デプロイ**: GitHub Pages（静的ホスティング）
+- フロントエンド：Vanilla JavaScript、HTML、CSS
+- データ永続化：LocalStorage。明示選択時のみメモリ内で一時利用
+- グラフ相当の表示：登録行数のリストとHTMLのprogress要素
+- デプロイ：GitHub Pages、mainブランチのルート
+- テスト：Node.js標準のnode:test。CIはNode.js 22
 
 ### 設計思想
 
-1. **Zero Dependencies（最小依存）**
-   - Chart.js 以外の外部ライブラリを使用しない
-   - フレームワーク不要で軽量・高速
-   - オフライン動作可能
-
-2. **Privacy-First（プライバシー優先）**
-   - すべてのデータをクライアント側で処理
-   - サーバー送信なし
-   - アカウント登録不要
-
-3. **Progressive Enhancement（段階的機能向上）**
-   - 基本機能はすべてのブラウザーで動作
-   - モダンブラウザーで高度な機能を提供
-
-4. **Accessibility（アクセシビリティ）**
-   - セマンティックHTML
-   - キーボード操作対応
-   - スクリーンリーダー対応（role属性）
+1. 計算と入力検証をDOM非依存のStockCoreに置く。
+2. 保存候補を検証し、永続化できてからメモリを置き換える。
+3. 不明な値を0や「安全」として扱わない。
+4. 数量と割合を分け、総合点で不足を隠さない。
+5. 外部ライブラリーや通信なしで画面を動かす。
 
 ### ファイル構成
 
-```
-script.js    (1000行) - アプリケーションロジック
-style.css    (1200行) - スタイル定義
-index.html   (800行)  - マークアップ
-```
+| ファイル | 責務 |
+|---|---|
+| stock-core.js | UMD／CommonJS、暦日・検証・集計・計画値・アラート |
+| stock-store.js | 保存領域の読み取り、保存、競合検出、一時利用、元データ取得 |
+| script.js | 入力イベント、確定済み状態、描画、ダイアログ |
+| theme-init.js | CSS適用前にテーマを読み取り、htmlに指定 |
+| style.css | モバイル優先のレイアウト、2テーマ |
+| index.html | 5タブ、入力フォーム、13節の基礎知識 |
+| test/ | コア・保存・UI構造の回帰テスト |
+
+StockCoreとStockStoreはNode.jsではrequire、ブラウザーではグローバル変数として参照します。HTMLではcore、store、scriptの順に読み込みます。
 
 ---
 
@@ -64,584 +57,235 @@ index.html   (800行)  - マークアップ
 
 ### XSS対策
 
-#### 1. HTML エスケープ関数
-
-すべてのユーザー入力を表示前にエスケープ：
+在庫表はescapeHtmlで入力文字列をエスケープしてからHTMLを構築します。アラート・ヘルプなどはtextContentで出力します。登録値をコードとして実行する処理はありません。
 
 ```javascript
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c=>({
-    '&':'&amp;',
-    '<':'&lt;',
-    '>':'&gt;',
-    '"':'&quot;',
-    "'":'&#39;'
+    '&':'&amp;', '<':'&lt;', '>':'&gt;',
+    '"':'&quot;', "'":'&#39;'
   }[c]));
 }
 ```
 
-**使用例**：
-```javascript
-// ❌ 危険：直接HTML挿入
-li.innerHTML = item.name;
+カテゴリはfood、water、medicine、pet-food、daily、tool、otherの7値です。不明な値はotherへ変換せず、入力全体を拒否します。CSSクラス名にも許可された値だけを使います。
 
-// ✅ 安全：エスケープ後に挿入
-li.innerHTML = escapeHtml(item.name);
+### 入力の上限
+
+| 項目 | 受け付ける値 |
+|---|---|
+| 品名 | 200文字まで。空文字・空白だけは不可 |
+| 単位 | 50文字まで |
+| 数量・1単位あたりkcal | 有限の0〜1,000,000。kcalは未入力をnullとして保持 |
+| 期限 | 空文字または実在するYYYY-MM-DD。年は0001〜9999 |
+| 各人数・匹数 | 0〜100の整数 |
+| 想定日数 | 3・7・14・30・180 |
+| 人の水量・ペットの水量 | 0〜100 L／日。ペットはnullも可 |
+| 人のカロリー計画値 | 0〜10,000 kcal／日 |
+| 警告閾値 | 1・2・3・6カ月 |
+| 在庫行数 | 最大5,000件 |
+| JSONファイル | 最大10×1024×1024バイト（10MiB） |
+
+数値の文字列は全体をNumberで変換し、有限性・範囲を検証します。「12abc」の部分だけを読む処理や、上限への丸めはしません。HTMLの入力制約だけに頼らず、保存・インポートにも同じ検証を適用します。数量0は有効な記録です。
+
+### CSPと限界
+
+HTMLの先頭側に次のmeta CSPを置きます。
+
+```text
+default-src 'none'; script-src 'self'; style-src 'self';
+img-src 'self' data:; connect-src 'none'; base-uri 'none';
+form-action 'none'; object-src 'none'
 ```
 
-#### 2. カテゴリホワイトリスト方式
+外部CDN、インラインスクリプト、eval、アプリからの外部通信を必要としません。リンクで公式資料へ移動する操作は別です。Referrer-Policyはno-referrerです。
 
-CSSクラス名として使用されるカテゴリを制限：
+X-Frame-OptionsとX-Content-Type-Optionsはmetaタグでは有効なレスポンスヘッダーになりません。この構成では、任意のレスポンスヘッダーやクリックジャッキング防御を保証しません。
 
-```javascript
-const validCategories = [
-  'food', 'water', 'medicine',
-  'pet-food', 'daily', 'tool', 'other'
-];
-
-// カテゴリをホワイトリストで検証
-category: validCategories.includes(item.category)
-  ? item.category
-  : 'other'
-```
-
-**理由**：
-- ユーザー入力をそのままCSSクラス名に使用すると、任意のスタイル注入が可能
-- ホワイトリスト方式で安全なカテゴリのみ許可
-
-#### 3. 入力長制限
-
-```javascript
-validateItems(data) {
-  return data.map(item => ({
-    name: String(item.name || '').trim().substring(0, 200),    // 最大200文字
-    unit: String(item.unit || '').trim().substring(0, 50),     // 最大50文字
-    expiry: String(item.expiry || '').substring(0, 20),        // ISO 8601形式
-    // ...
-  }));
-}
-```
-
-**効果**：
-- DoS攻撃の防止（巨大データの挿入を防ぐ）
-- LocalStorageの容量制限対策
-- UI表示の破綻防止
-
-#### 4. セキュリティヘッダー
-
-```html
-<meta http-equiv="X-Content-Type-Options" content="nosniff" />
-<meta http-equiv="X-Frame-Options" content="DENY" />
-<meta name="referrer" content="strict-origin-when-cross-origin" />
-```
-
-- **X-Content-Type-Options**: MIMEタイプスニッフィング防止
-- **X-Frame-Options**: クリックジャッキング攻撃防止
-- **Referrer-Policy**: リファラー情報の漏洩防止
-
-#### 5. ファイルサイズ制限
-
-```javascript
-$('#importJson').addEventListener('change', async (e)=>{
-  const file = e.target.files[0];
-
-  // 最大10MBに制限
-  if(file.size > 10 * 1024 * 1024){
-    alert('ファイルサイズが大きすぎます（最大10MB）。');
-    e.target.value = '';
-    return;
-  }
-  // ...
-});
-```
+LocalStorageと出力JSONは平文です。機密情報を入れないでください。CSPやエスケープは暗号化、利用者認証、改ざん検出の代わりにはなりません。
 
 ---
 
-## 4段階期限判定アルゴリズム
+## 期限判定アルゴリズム
 
 ### 概要
 
-アイテムの賞味/消費期限を4段階で自動判定：
+| コアの状態 | 画面表示 | 条件 |
+|---|---|---|
+| expired | 期限切れ | 期限日が今日より前 |
+| today | 本日期限 | 今日と同じ暦日 |
+| near | 期限間近 | 明日から警告閾値の日まで |
+| later | 期限まで余裕 | 警告閾値の日より後 |
+| unknown | 期限未入力 | 空文字 |
 
-1. 🔴 **期限切れ**（red）: 昨日以前
-2. 🟠 **本日期限**（orange）: 今日
-3. 🟡 **要消費**（yellow）: 警告閾値以内
-4. 🟢 **OK**（green）: 警告閾値を超えている
+### 暦日の比較
 
-### 実装の要点
-
-#### 1. 日付のみの比較（時刻を無視）
-
-```javascript
-const now = new Date();
-const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 0:00:00
-const tomorrow = new Date(today);
-tomorrow.setDate(tomorrow.getDate() + 1);
-```
-
-**重要**：
-- `new Date()` は現在時刻を含む（例：2025-10-08 14:30:45）
-- 期限日は日付のみ（例：2025-10-08）
-- 時刻を含めて比較すると、今日の0時～現在時刻の間が「期限切れ」と誤判定される
-- 解決策：`today` を0時0分0秒に設定して比較
-
-#### 2. 判定ロジック
+todayは端末のローカル年・月・日をYYYY-MM-DDにします。dateNumberは厳密な形式と実在日を確認し、UTC上の日番号へ変換します。ローカル時刻の差を24時間で割らないため、夏時間の切り替えで日数がずれる計算にはしません。
 
 ```javascript
-function renderTable(){
-  // ...
-  const warnEdge = new Date(now);
-  warnEdge.setMonth(now.getMonth() + alertMonths);  // 警告閾値
-
-  for(const it of paginatedItems){
-    let badge = '<span class="badge">—</span>';
-    if(it.expiry){
-      const d = parseDate(it.expiry);  // YYYY-MM-DDをDate化
-      if(d){
-        if(d < today)
-          badge = '<span class="badge red">期限切れ</span>';
-        else if(d < tomorrow)
-          badge = '<span class="badge orange">本日期限</span>';
-        else if(d <= warnEdge)
-          badge = '<span class="badge yellow">要消費</span>';
-        else
-          badge = '<span class="badge green">OK</span>';
-      }
-    }
-    // ...
-  }
-}
+const day = StockCore.today();
+const difference =
+  StockCore.dateNumber('2026-10-26') -
+  StockCore.dateNumber('2026-10-12'); // 14
 ```
 
-#### 3. 判定フロー図
+addMonthsは移動先の月末に切り詰めます。2026-01-31の1カ月後は2026-02-28、2028-01-31なら2028-02-29です。
 
-```
-入力: 期限日 d, 今日 today, 明日 tomorrow, 警告閾値 warnEdge
+### 境界と更新
 
-d < today?
-  Yes → 🔴 期限切れ
-  No  → d < tomorrow?
-          Yes → 🟠 本日期限
-          No  → d <= warnEdge?
-                  Yes → 🟡 要消費
-                  No  → 🟢 OK
-```
+- 期限が今日の品は期限切れではなくtoday
+- 消費候補は今日から14日後まで、両端を含む
+- 候補のカテゴリはfood・water・pet-foodだけ
+- 数量0の行はアラートと候補から除外
+- 期限未入力は計画算入から除外するが、台帳から削除しない
+- 存在しない日付は入力検証で拒否し、別の日へ補正しない
 
-#### 4. エッジケース処理
-
-```javascript
-function parseDate(str){
-  if(!str) return null;  // 期限なし → nullを返す
-  const d = new Date(str + 'T00:00:00');  // ISO 8601形式
-  return isNaN(d) ? null : d;  // 不正な日付 → null
-}
-```
-
-**処理されるケース**：
-- 期限未入力（`expiry: ''`） → ステータスなし（`—`）
-- 不正な日付（`expiry: 'invalid'`） → ステータスなし
-- 過去の日付（`expiry: '2020-01-01'`） → 🔴 期限切れ
+日付の更新は約60秒ごとの確認、windowのfocus、表示状態への復帰で行います。バックグラウンドでのタイマー抑制や端末の時計設定によって反映時刻は変わります。OS通知やプッシュ通知ではありません。
 
 ---
 
-## AI防災アドバイザーのスコアリング
+## 備蓄チェックの判定
 
-### 概要
+### 台帳と計画算入量
 
-備蓄状況を5つの観点から総合分析し、具体的なアクションを提案：
+水はcategoryがwaterの場合だけ対象です。単位の大文字・小文字を区別せず、L／ℓはそのまま、mLは1,000で割ってLにします。本・箱などの容量は推測しません。
 
-1. **総合評価**（4段階グレード）
-2. **水・食料の充足状況**（不足量の具体的提示）
-3. **期限管理状況**（期限切れ・間近の件数）
-4. **カテゴリバランス**（多様性チェック）
-5. **具体的なアクション**（家族構成に応じた提案）
+人用食料はcategoryがfoodでkcalが入力されている場合だけ、数量×kcalを合計します。ペットフードや医薬品を人用カロリーに加えません。
 
-### 総合評価アルゴリズム
+台帳の水量・カロリーは期限切れや期限未入力でも集計します。計画算入量にはtoday・near・laterの品だけを入れます。計算対象に入ったという表示は、開封状態や衛生面を確認済みという意味ではありません。
 
-```javascript
-function generateExpertAnalysis(expired, near, rolling){
-  const cov = coverage();  // 充足率を計算
-  const avgCoverage = (cov.waterCov + cov.kcalCov) / 2;
+### 未確認の数値
 
-  let overallGrade = '';
-  let gradeClass = '';
+totalsはunknownWater、unknownKcal、expired、undated、zeroの行数を別々に返します。画面には集計できない理由を表示します。同じ行が「期限未入力」と「水の単位不明」の両方に該当することがあります。
 
-  if(avgCoverage >= 100 && expired.length === 0){
-    overallGrade = '優秀';
-    gradeClass = 'grade-excellent';
-  }else if(avgCoverage >= 80 && expired.length <= 2){
-    overallGrade = '良好';
-    gradeClass = 'grade-good';
-  }else if(avgCoverage >= 50){
-    overallGrade = '要改善';
-    gradeClass = 'grade-warning';
-  }else{
-    overallGrade = '緊急対応必要';
-    gradeClass = 'grade-critical';
-  }
-  // ...
-}
-```
-
-### 判定基準
-
-| グレード | 条件 | 視覚効果 |
-|---------|------|---------|
-| 優秀 | 充足率≧100% AND 期限切れ=0件 | 緑グラデーション + パルスアニメーション |
-| 良好 | 充足率≧80% AND 期限切れ≦2件 | 青グラデーション + パルスアニメーション |
-| 要改善 | 充足率≧50% | 橙グラデーション + パルスアニメーション |
-| 緊急対応必要 | 充足率<50% | 赤グラデーション + パルスアニメーション |
-
-### 不足量の具体的提示
+### 達成率と不足量
 
 ```javascript
-// 水の不足分析
-if(cov.waterCov < 100){
-  const shortage = Math.ceil(cov.needs.needWater - cov.totals.waterL);
-  const bottles = Math.ceil(shortage / 2);  // 2Lペットボトル換算
-
-  coverageAnalysis.push(`
-    <strong>💧 水：</strong>目標の<span>${cov.waterCov}%</span>
-    <span class="shortage-amount">不足 ${shortage}L</span>
-    <div class="action-hint">
-      → 2Lペットボトルで約${bottles}本の追加購入を推奨
-    </div>
-  `);
-}
-
-// 食料の不足分析
-if(cov.kcalCov < 100){
-  const shortage = Math.ceil(cov.needs.needKcal - cov.totals.kcal);
-  const cansNeeded = Math.ceil(shortage / 300);  // 1缶約300kcal想定
-
-  coverageAnalysis.push(`
-    <strong>🍱 食料：</strong>目標の<span>${cov.kcalCov}%</span>
-    <span class="shortage-amount">不足 ${shortage} kcal</span>
-    <div class="action-hint">
-      → 缶詰・レトルト約${cansNeeded}個分の補充が必要
-    </div>
-  `);
-}
+const result = StockCore.metric(12, 21);
+// { ratio: 57.14285714285714, shortage: 9, met: false }
 ```
 
-### カテゴリバランス分析
+計画値がnullまたは0ならratio・shortage・metはnullです。0%や達成済みとはしません。計算上の達成率は100%を超える値も保持し、進捗バーだけを100%で止めます。表示の達成率は小数第2位まで切り捨て、達成判定は丸める前の量で行います。
 
-```javascript
-const categories = {};
-for(const it of items){
-  categories[it.category] = (categories[it.category] || 0) + 1;
-}
-const categoryCount = Object.keys(categories).length;
-
-if(categoryCount >= 5){
-  categoryAnalysis.push('✅ カテゴリバランスは良好です');
-}else if(categoryCount >= 3){
-  categoryAnalysis.push('⚠️ カテゴリがやや偏っています');
-}else{
-  categoryAnalysis.push('🔴 カテゴリが偏っています');
-}
-
-// 必須カテゴリの欠落チェック
-if(!categories['medicine']){
-  categoryAnalysis.push('💊 医薬品が未登録です');
-}
-if(!categories['daily']){
-  categoryAnalysis.push('🧻 生活用品を追加推奨');
-}
-```
-
-### 家族構成に応じた提案
-
-```javascript
-const totalPets = family.dogs + family.cats;
-
-if(totalPets > 0 && !categories['pet-food']){
-  recommendations.push('🐾 ペット用の備蓄を追加してください');
-}
-if(family.children > 0){
-  recommendations.push('👶 乳幼児がいる場合、粉ミルク・離乳食も必須');
-}
-if(family.seniors > 0){
-  recommendations.push('👴 高齢者向けに、常備薬・介護食を考慮');
-}
-```
+水と食料の割合を平均した総合点、栄養バランスの採点、避難の可否判定はありません。カテゴリ別の表示は数量が正の登録行数で、物資の重量・容量・栄養素を横断して合計したものではありません。
 
 ---
 
 ## 必要量計算ロジック
 
-### 水の必要量（1日あたり）
+### 水の計画値
 
-```javascript
-function calcNeeds(){
-  const waterPerDay =
-    family.adults * 4 +      // 成人: 4L/日
-    family.children * 2 +    // 子ども: 2L/日
-    family.seniors * 3 +     // 高齢者: 3L/日
-    family.dogs * 1 +        // 犬: 1L/日
-    family.cats * 0.3;       // 猫: 0.3L/日
+人の初期値は1人1日3Lで、飲料と調理用の目安です。衛生・洗浄・トイレ用の水を含みません。農林水産省の家庭備蓄資料を参照し、個別事情に合わせて変更できる入力値として扱います。
 
-  const needWater = waterPerDay * family.days;
-  // ...
-}
+```text
+人の水量／日 = (成人 + 子ども + 高齢者) × waterPerPerson
+合計水量 = (人の水量／日 + 犬×dogWater + 猫×catWater) × days
 ```
 
-**根拠**：
-- 成人: 飲料2L + 調理・衛生2L = 4L
-- 子ども: 体格が小さいため半分
-- 高齢者: 脱水リスクを考慮して3L
-- 犬: 体重10kg想定で1L
-- 猫: 体重5kg想定で0.3L
+dogWater・catWaterの初期値はnullです。該当するペットが1匹以上いてnullの場合、needWaterはnull、petUnknownはtrueになります。knownWaterには既知の部分だけを保持します。匹数0の動物の未設定値は合計を妨げません。
 
-### カロリーの必要量（1日あたり）
+### 人用食料の計画値
 
-```javascript
-const kcalPerDay =
-  family.adults * 2000 +     // 成人: 2000kcal/日
-  family.children * 1400 +   // 子ども: 1400kcal/日
-  family.seniors * 1800;     // 高齢者: 1800kcal/日
-
-const needKcal = kcalPerDay * family.days;
+```text
+計画カロリー =
+  (成人×adultKcal + 子ども×childKcal + 高齢者×seniorKcal) × days
 ```
 
-**根拠**：
-- 成人: 厚生労働省「日本人の食事摂取基準」に準拠
-- 子ども: 6-11歳の平均摂取カロリー
-- 高齢者: 活動量低下を考慮
+初期値は成人2,000、子ども1,400、高齢者1,800kcalです。食事摂取基準への適合や個人の必要量を保証する値ではなく、変更可能な入力例です。ペットフードは必要量の計算対象外です。
 
-### 充足率の計算
+### 確認例
 
-```javascript
-function coverage(){
-  const t = calcTotals();   // 現在の備蓄量
-  const n = calcNeeds();    // 必要量
+成人2人・子ども2人・7日、初期の1日計画値なら、水84L、人用食料47,600kcalになります。期限内の水12Lに対する不足量は72Lです。
 
-  // 充足率（上限100%）
-  const waterCov = n.needWater
-    ? Math.min(100, Math.round(t.waterL / n.needWater * 100))
-    : 0;
-  const kcalCov = n.needKcal
-    ? Math.min(100, Math.round(t.kcal / n.needKcal * 100))
-    : 0;
-
-  return { waterCov, kcalCov, totals: t, needs: n };
-}
-```
-
-**工夫点**：
-- 100%を上限とする（150%などと表示しない）
-- 必要量が0の場合（家族0人）は0%とする
+水0.5L＋12Lは12.5Lです。同じ数量2Lでもカテゴリがdailyの洗剤は0Lとして水の合計から除外します。
 
 ---
 
-## テーマシステムとChart.js統合
+## テーマと数値の表示
 
-### CSS Variables によるテーマ切り替え
+### CSS変数によるテーマ
 
-```css
-:root{
-  --bg:#0b0c0f;
-  --text:#e8eaed;
-  --accent:#4cc9f0;
-  /* ... */
-}
+theme-init.jsをスタイルシートより先に同期読込します。保存されたrsp_themeがlightまたはdarkなら採用し、それ以外や読み取り例外ではlightにします。CSS適用前にhtmlのdata-themeを指定します。
 
-[data-theme="light"]{
-  --bg:#fafafa;
-  --text:#1a1a1a;
-  --accent:#2563eb;
-  /* ... */
-}
-```
+script.jsのsetThemeはhtmlとbodyのdata-theme、切り替えボタンの説明を更新します。テーマ保存の例外は在庫機能を停止させません。
 
-### Chart.js のテーマ連動
+### 数量と割合の分離
 
-```javascript
-function getChartTextColor(){
-  return currentTheme === 'light' ? '#1a1a1a' : '#cbd5e1';
-}
+カテゴリはリスト、水と人用食料は数量の文章と別の達成率・progress要素で表示します。L／kcalと%を同じ軸に置きません。テーマ変更はCSS変数で反映し、外部グラフライブラリーの生成・破棄はありません。
 
-function setTheme(theme){
-  currentTheme = theme;
-  document.body.setAttribute('data-theme', theme);
-  localStorage.setItem(LS_THEME, theme);
-
-  // Chart.js を再描画してテーマ反映
-  setTimeout(()=>{
-    drawCategoryChart();
-    drawCoverageCharts();
-  }, 100);
-}
-```
-
-**課題と解決策**：
-- Chart.js は CSS Variables を直接参照できない
-- 解決策：テーマ切り替え時にグラフを再描画
-- 100ms の遅延でCSS transitionを待つ
-
-### グラフの破棄と再生成
-
-```javascript
-function drawCategoryChart(){
-  const ctx = $('#categoryChart');
-
-  // 既存のグラフを破棄
-  if(categoryChart){
-    categoryChart.destroy();
-    categoryChart = null;
-  }
-
-  // 新しいグラフを生成
-  categoryChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: { /* ... */ },
-    options: {
-      plugins:{
-        legend:{
-          labels:{ color: getChartTextColor() }  // テーマに応じた色
-        }
-      }
-    }
-  });
-}
-```
+画面の装飾的な動きを抑え、prefers-reduced-motionにも対応します。
 
 ---
 
-## レスポンシブツールチップ実装
+## ヘルプとキーボード操作
 
-### 課題
+### ヘルプ
 
-モーダル内の2列グリッドで、右列のツールチップが画面からはみ出す：
+説明ボタンはbutton要素で、共通のhelpPopoverにtextContentを設定して開きます。Popover APIを使い、画面内に収まる固定幅・最大高とスクロールを指定します。開いている説明はEscapeで閉じ、その操作では入力ダイアログを閉じません。
 
-```
-┌─────────────────────────┐
-│ 左列        │ 右列? → │ ツールチップ切れる
-└─────────────────────────┘
-```
+### タブとダイアログ
 
-### 解決策：列に応じた位置調整
+- タブ：aria-controls・aria-selected・aria-labelledby、非選択タブはtabindex=-1
+- 左右矢印：前後のタブへ移動。Home／End：最初／最後へ移動
+- 非選択パネル：hidden属性で非表示
+- ダイアログ：role=dialog・aria-modal・見出しの関連付け
+- 開く操作：品名にフォーカス、背景をinertに指定
+- Tab／Shift+Tab：ダイアログ内を循環
+- 閉じる操作：背景のinertを解除し、開いたボタンへフォーカスを復帰
 
-```css
-/* 基本：左揃え */
-.help-icon[data-tooltip]::before{
-  left:0;
-  /* ... */
-}
+### 小さい画面
 
-/* 右列（偶数番目）：右揃え */
-.modal-body .grid > div:nth-child(even) .help-icon[data-tooltip]::before{
-  left:auto;
-  right:0;
-}
+タブは中央で折り返します。フォームは1列を基本にし、幅650px以上で列を増やします。在庫表は横スクロール領域内に収め、画面全体を横へ押し広げないようにします。入力の文字サイズは16px以上です。
 
-/* モバイル：すべて左揃えに統一 */
-@media (max-width:640px){
-  .modal-body .grid > div:nth-child(even) .help-icon[data-tooltip]::before{
-    left:0;
-    right:auto;
-  }
-}
-```
-
-### レスポンシブ幅調整
-
-```css
-.help-icon[data-tooltip]::before{
-  min-width:min(200px, 60vw);   /* 狭い画面でも適応 */
-  max-width:min(280px, 85vw);   /* 画面幅の85%まで */
-}
-```
+ChromiumとFirefoxでファイル直接表示とローカルHTTPを確認しています。Safari、実機のモバイルブラウザー、スクリーンリーダーの読み上げ結果は未確認です。Popover APIとinertに対応したブラウザーが必要です。
 
 ---
 
 ## データ永続化と検証
 
-### LocalStorage 構造
+### LocalStorage構造
 
-```javascript
-localStorage['rsp_items']        // アイテムデータ（JSON配列）
-localStorage['rsp_family']       // 家族構成（JSON）
-localStorage['rsp_alert_months'] // 警告閾値（文字列）
-localStorage['rsp_theme']        // テーマ（'dark' | 'light'）
+| キー | 用途 |
+|---|---|
+| rsp_state_v2 | meta、items、family、alertMonthsをまとめたJSON |
+| rsp_items | 互換読み込み対象。在庫JSON配列を保持するキー |
+| rsp_family | 互換読み込み対象。家族構成のJSON |
+| rsp_alert_months | 互換読み込み対象。警告月数の文字列 |
+| rsp_theme | lightまたはdark |
+
+rsp_state_v2があればそれを使い、なければ互換キーを読みます。読み込み時に保存し直したり、互換キーを書き換えたり削除したりしません。計画値を含まない家族構成には初期値を補い、画面に確認を促す説明を出します。
+
+rsp_state_v2が壊れている場合、別キーの古い内容へ勝手に切り替えません。保存を止め、元の文字列を復旧用JSONとして取り出せるようにします。復旧用JSONは通常のインポートとは別形式です。
+
+### 保存の手順
+
+```text
+候補作成 → 全体の検証 → 保存領域の変更確認
+        → rsp_state_v2へのsetItemが成功
+        → メモリ更新 → 描画
 ```
 
-### 起動時の検証フロー
+キー1つへの書き込みなので、家族構成だけ保存されて在庫が保存されない部分更新を避けます。setItemが例外を投げたら確定済み状態を更新しません。入力フォームは残します。
 
-```javascript
-// 1. LocalStorageから読み込み
-let items = loadJSON(LS_ITEMS, []);
+保存前に、読み取り時の4キーの文字列と現在値を比較します。異なればconflictとして停止し、storageイベントでも通知します。ただし比較と書き込みをまたぐ排他ロックはなく、複数タブの完全な同時更新を保証しません。
 
-// 2. データ検証
-items = validateItems(items);
+### インポート
 
-// 3. 検証結果を保存
-saveJSON(LS_ITEMS, items);
-```
+metaを付ける場合はappがrollingstock-planner、verが1または2である必要があります。items・family・alertMonthsは必須です。
 
-### 検証関数の実装
+1. ファイルサイズを読み込み前に確認。
+2. JSONを解析し、件数・全行・家族構成・設定値を検証。
+3. 読み込み待ちの間に画面内の状態が変わっていないか確認。
+4. データ全体を置き換えることを利用者に確認。
+5. 保存に成功してから画面を更新。
 
-```javascript
-function validateItems(data) {
-  // 配列でなければ空配列
-  if(!Array.isArray(data)) return [];
+不正行の間引き、数値の部分解析、未知のカテゴリの置換は行いません。いずれか1件が不正なら全部を拒否します。保存不能状態では正常なインポートも保存できません。破損状態の明示的な置換インポートは受け付けます。
 
-  const validCategories = ['food', 'water', /* ... */];
+### 一時利用
 
-  return data
-    .filter(item => item && typeof item === 'object')  // オブジェクトのみ
-    .map(item => ({
-      name: String(item.name || '').trim().substring(0, 200),
-      category: validCategories.includes(item.category)
-        ? item.category
-        : 'other',
-      quantity: Math.max(0, parseFloat(item.quantity) || 0),
-      // ... 他のフィールドも同様に検証
-    }))
-    .filter(item => item.name);  // 名前なしは除外
-}
-```
+保存領域が使えないとき、自動ではメモリ保存へ移行しません。利用者が「保存せず一時利用」を選んだ場合だけメモリ内で操作します。再読込で消える旨を常時表示します。切り替え前に失敗した操作を勝手に再実行しません。
 
-**検証内容**：
-1. 型チェック（配列、オブジェクト）
-2. カテゴリのホワイトリスト検証
-3. 文字列長の制限
-4. 数値の範囲チェック（非負数）
-5. 必須フィールドの確認
-
-### インポート時の検証
-
-```javascript
-$('#importJson').addEventListener('change', async (e)=>{
-  try{
-    const text = await file.text();
-    const data = JSON.parse(text);
-
-    // 1. ファイルサイズチェック
-    if(file.size > 10 * 1024 * 1024){
-      alert('ファイルサイズが大きすぎます');
-      return;
-    }
-
-    // 2. データ構造の検証
-    if(Array.isArray(data.items)){
-      items = validateItems(data.items);
-    }
-    if(data.family && typeof data.family === 'object'){
-      family = validateFamily(data.family);
-    }
-
-    // 3. 検証済みデータを保存
-    saveJSON(LS_ITEMS, items);
-    saveJSON(LS_FAMILY, family);
-
-    renderAll();
-    alert('インポートしました。');
-  }catch(err){
-    alert('JSONの読み込みに失敗しました。');
-  }
-});
-```
+ブラウザーの容量制限は一定ではなく、10MiBのJSONを保存できるとは限りません。HTTPS／HTTP／ファイル直接表示で同じデータが共有される前提にもしていません。
 
 ---
 
@@ -691,7 +335,7 @@ function renderTable(){
 ```javascript
 function updatePagination(totalPages){
   if(totalPages <= 1){
-    pagination.style.display = 'none';  // 1ページ以下は非表示
+    pagination.hidden = true;  // 1ページ以下は非表示
     return;
   }
 
@@ -724,105 +368,49 @@ $('#search').addEventListener('input', ()=>{
 
 ## パフォーマンス最適化
 
-### 1. 遅延評価（Lazy Evaluation）
+### 描画範囲
 
-```javascript
-// Chart.js の初期化を遅延
-let categoryChart, waterChart, kcalChart;
+検索・並べ替えを行ってから、在庫表には最大50行を描画します。編集・削除ボタンのリスナーは表示した行に付けます。これは親へのイベント委譲ではありません。
 
-function drawCategoryChart(){
-  // タブが表示されるまで初期化しない
-  if(!$('#stock').classList.contains('active')) return;
+renderAllは在庫一覧とアラートを更新します。集計は検索による絞り込みより先に行い、検索結果に関係なく全在庫を対象にします。空の在庫でも合計と図表相当の表示を更新します。
 
-  // 初回のみ初期化
-  if(categoryChart){
-    categoryChart.destroy();
-  }
-  categoryChart = new Chart(/* ... */);
-}
-```
+### 保存と再計算
 
-### 2. イベント委譲（Event Delegation）
+検索・並べ替え・タブ移動・日付更新は保存を行いません。確定操作時だけ保存します。外部グラフの再生成やCSSの完了待ちはありません。
 
-```javascript
-// ❌ 悪い例：各行にイベントリスナーを追加
-for(const item of items){
-  const btn = document.createElement('button');
-  btn.addEventListener('click', ()=> deleteItem(item.id));
-}
-
-// ✅ 良い例：親要素にイベントリスナーを1つだけ追加
-tbody.querySelectorAll('[data-del]').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    const i = parseInt(b.dataset.del,10);
-    // ...
-  });
-});
-```
-
-### 3. Chart.js の再描画最適化
-
-```javascript
-function setTheme(theme){
-  // ...
-
-  // CSS transitionの完了を待ってからChart.js再描画
-  setTimeout(()=>{
-    drawCategoryChart();
-    drawCoverageCharts();
-  }, 100);
-}
-```
-
-### 4. LocalStorage の最小化
-
-```javascript
-// 必要な時のみ保存
-function renderTable(){
-  // レンダリングのみ（保存しない）
-}
-
-$('#itemForm').addEventListener('submit', ()=>{
-  items.push(newItem);
-  saveJSON(LS_ITEMS, items);  // ここでのみ保存
-  renderAll();
-});
-```
+最大件数5,000は入力上限であり、あらゆる端末で高速に操作できる保証ではありません。LocalStorageへの書き込みとJSON処理は同期処理を含みます。
 
 ---
 
 ## まとめ
 
-### 主要な技術的特徴
+### 実装上の確認点
 
-1. **セキュリティ**: XSS対策、ホワイトリスト方式、入力検証
-2. **アルゴリズム**: 4段階期限判定、AI分析スコアリング
-3. **UI/UX**: レスポンシブツールチップ、テーマ連動グラフ
-4. **データ管理**: LocalStorage検証、ページネーション
-5. **パフォーマンス**: 遅延評価、イベント委譲
+- 数量・期限・単位・カテゴリを検証してから集計
+- 計画値・台帳・計画算入量を区別
+- 不明・0目標・期限切れを達成済みと表示しない
+- 保存が成功してからメモリを更新
+- ブラウザーの保存領域が使えなくても、理由と復旧手段を表示
+- 狭い画面とキーボード操作を確認
 
-### 設計の工夫
+### 検証
 
-- **Vanilla JavaScript**: フレームワーク不要で軽量・高速
-- **Privacy-First**: サーバー送信なし、完全クライアント処理
-- **Progressive Enhancement**: 基本機能から段階的に向上
-- **Accessibility**: セマンティックHTML、キーボード操作対応
+Node.js 22でnpm testを実行します。日付の境界、期限切れ・期限未入力、単位、数量0、未設定のペット、丸め前の達成判定、保存例外、別タブの変更、不正JSON、UIの保護条件を対象にしています。
 
-### 今後の拡張可能性
+ブラウザー確認はChromium／Firefox、ファイル直接表示／HTTP、320・390・800・1280px、ライト／ダーク、5タブで行います。保存を遮断した場合と容量エラー、全削除、入力ダイアログ、キーボード、CSP違反も確認します。
 
-- PWA化（Service Worker、オフライン対応）
-- IndexedDB移行（LocalStorageの5MB制限を超える）
-- Web Crypto API（データ暗号化）
-- WebAssembly（計算処理の高速化）
+### 拡張時に維持すること
+
+消費・補充の操作や容量換算を追加する場合も、未設定の値を推測しないこと、保存失敗で入力を失わないことを維持してください。多言語化では計算ロジックとデータ形式を共有し、単位と限界の説明をそろえます。
 
 ---
 
 ## 参考資料
 
-- [Chart.js 公式ドキュメント](https://www.chartjs.org/docs/latest/)
 - [MDN Web Docs - LocalStorage](https://developer.mozilla.org/ja/docs/Web/API/Window/localStorage)
 - [OWASP - XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
-- [厚生労働省 - 日本人の食事摂取基準](https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/kenkou_iryou/kenkou/eiyou/syokuji_kijyun.html)
+- [農林水産省 - 家庭での食料品備蓄](https://www.maff.go.jp/j/zyukyu/foodstock/imadoki/imadoki02_10.html)
+- 食品・停電・ペットの公式資料は[README.md](README.md#-関連知識)を参照
 
 ---
 
