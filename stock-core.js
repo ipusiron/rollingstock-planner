@@ -53,12 +53,19 @@
     if (!CATEGORIES.includes(item.category)) fail('category');
     const expiry = text(item.expiry ?? '', 10);
     if (expiry && dateNumber(expiry) === null) fail('date');
-    return {
+    const out = {
       name: text(item.name, 200, true), category: item.category,
       quantity: number(item.quantity, 1000000), unit: text(item.unit ?? '', 50), expiry,
       kcal: item.kcal === null || item.kcal === undefined || item.kcal === '' ? null : number(item.kcal, 1000000),
       createdAt: item.createdAt === undefined ? Date.now() : number(item.createdAt, Number.MAX_SAFE_INTEGER, true)
     };
+    // Packaged water is explicit. Never infer bottle size from a name or total.
+    if (item.volumeMl !== undefined) {
+      if (item.category !== 'water' || out.unit !== 'bottle') fail('package');
+      out.volumeMl = number(item.volumeMl, 1000000, true);
+      if (out.volumeMl === 0 || !Number.isInteger(out.quantity)) fail('package');
+    }
+    return out;
   }
   function validateFamily(data) {
     if (!object(data)) fail('family');
@@ -76,7 +83,7 @@
   }
   function validateState(data) {
     if (!object(data) || !Array.isArray(data.items) || data.items.length > MAX_ITEMS) fail('items');
-    if (data.meta && (data.meta.app !== 'rollingstock-planner' || ![1, 2].includes(data.meta.ver))) fail('version');
+    if (data.meta !== undefined && (!object(data.meta) || data.meta.app !== 'rollingstock-planner' || ![1, 2, 3].includes(data.meta.ver))) fail('version');
     if (![1, 2, 3, 6].includes(data.alertMonths)) fail('months');
     return { items: data.items.map(validateItem), family: validateFamily(data.family), alertMonths: data.alertMonths };
   }
@@ -90,6 +97,7 @@
   }
   function waterVolume(item) {
     if (item.category !== 'water') return null;
+    if (item.volumeMl !== undefined) return item.quantity * item.volumeMl / 1000;
     const unit = item.unit.trim().toLowerCase();
     if (['l', 'ℓ'].includes(unit)) return item.quantity;
     if (unit === 'ml') return item.quantity / 1000;
