@@ -517,6 +517,9 @@
   const ja = {}, en = {};
   pairs.forEach(([source, translation], index) => { ja['s' + index] = source; en['s' + index] = translation; });
   const dynamic = {
+  "dateGuidanceTitle": ["期限の種類と、このツールの扱い", "Date types and how this tool uses them"],
+  "dateGuidance": ["賞味期限は品質の目安であり、過ぎた瞬間に食べられなくなる期限ではありません。消費期限を過ぎた食品は食べないでください。どちらも未開封で、表示どおりに保存した場合の期限です。このツールは開封・保存状態を確認できないため、種類を問わず期限切れ・期限未入力を計画から除外します。医薬品などは製品の表示に従ってください。", "A best-before date concerns quality; passing it does not automatically make food inedible. Do not eat food past its use-by date. Both dates assume unopened packaging and storage as directed. This tool cannot check opening or storage conditions, so it excludes past-date and undated records from the plan regardless of date type. Follow product labels for medicines and other supplies."],
+  "dateSource": ["消費者庁：食品の期限表示", "Consumer Affairs Agency: food date labeling (Japanese)"],
   "reviewLabel": ["見直し対象", "Review records"],
   "reviewAll": ["すべての在庫", "All inventory"],
   "reviewAny": ["見直し対象すべて（数量0を除く）", "All review items (excluding zero quantity)"],

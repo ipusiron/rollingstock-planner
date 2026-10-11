@@ -289,7 +289,7 @@ $('#clearAll').addEventListener('click', () => {
   if (commitState({ ...currentState(), items: [] })) renderAll();
 });
 $('#exportJson').addEventListener('click', () => {
-  downloadJSON({ meta: { app: 'rollingstock-planner', ver: 3 }, ...currentState() }, 'rollingstock-data');
+  downloadJSON({ meta: { app: 'rollingstock-planner', ver: 4 }, ...currentState() }, 'rollingstock-data');
 });
 $('#exportRecovery').addEventListener('click', () => {
   const raw = stockStore.recovery();

@@ -47,7 +47,7 @@ test('README example numbers are verified by the core', () => {
     for (const value of ['84L','47600kcal','72L','12.5L','600kcal','2000mL','500mL']) assert.ok(compact.includes(value), value);
     assert.match(text,/\b36(?:本| bottles)/);
     assert.match(text,/\b144(?:本| bottles)/);
-    assert.match(text,/meta.ver: 3/);
+    assert.match(text,/meta.ver: 4/);
     assert.match(text,/volumeMl/);
   }
 });

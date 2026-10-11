@@ -231,7 +231,7 @@ Import replaces data; it does not append. Export JSON first. Rescue raw data pro
 
 LocalStorage capacity varies by browser. A file within the import limit may still be too large to save. HTTPS, local HTTP and directly opened files use different storage locations; storage behavior for local files also depends on the browser.
 
-The storage key is `rsp_state_v2`; its internal format and regular JSON output use `meta.ver: 3`. Capacity-defined water retains `unit: "bottle"` and `volumeMl`. Formats 1, 2 and 3 can be read; unsupported versions are rejected. Compatibility keys such as `rsp_items` remain read-only. Language (`rsp_language`) and theme (`rsp_theme`) are saved independently and are not part of JSON backups.
+The storage key is `rsp_state_v2`; its internal format and regular JSON output use `meta.ver: 4`. Capacity-defined water retains `unit: "bottle"` and `volumeMl`; the date type is retained as `expiryType`. Formats 1, 2, 3 and 4 can be read; unsupported versions are rejected. Missing date types are not inferred. Compatibility keys such as `rsp_items` remain read-only. Language (`rsp_language`) and theme (`rsp_theme`) are saved independently and are not part of JSON backups.
 
 ---
 

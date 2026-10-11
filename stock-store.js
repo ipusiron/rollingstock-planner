@@ -37,7 +37,7 @@
       if (!snapshot || (!loaded && !replacing)) throw new Error('unavailable');
       const current = read();
       if (JSON.stringify(current) !== JSON.stringify(snapshot)) throw new Error('conflict');
-      const raw = JSON.stringify({ meta: { app: 'rollingstock-planner', ver: 3 }, ...data });
+      const raw = JSON.stringify({ meta: { app: 'rollingstock-planner', ver: 4 }, ...data });
       getStorage().setItem(KEY, raw); // setItem either succeeds or leaves the old value intact.
       snapshot = [raw, ...current.slice(1)];
       loaded = true;
