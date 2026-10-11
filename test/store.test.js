@@ -40,7 +40,7 @@ test('corrupt current state never falls back to stale legacy and remains recover
   assert.equal(store.recovery().state, '{broken');
   assert.throws(() => store.save(C.initial()));
   assert.equal(s.getItem(S.KEY), '{broken');
-  store.save(C.initial(), true); assert.equal(JSON.parse(s.getItem(S.KEY)).meta.ver, 2);
+  store.save(C.initial(), true); assert.equal(JSON.parse(s.getItem(S.KEY)).meta.ver, 3);
 });
 test('conflicting tab cannot overwrite another update, including legacy updates', () => {
   const s = storage(), first = S.create(() => s), second = S.create(() => s);

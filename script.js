@@ -24,6 +24,8 @@ let items = loadedStock.data.items;
 let family = loadedStock.data.family;
 let alertMonths = loadedStock.data.alertMonths;
 let importing = false;
+let undoEntry = null;
+let activeAction = null;
 
 // ページネーション設定
 const ITEMS_PER_PAGE = 50;  // 1ページあたりの表示件数
@@ -47,6 +49,8 @@ function commitState(candidate, replacing = false) {
     return false;
   }
   ({ items, family, alertMonths } = data);
+  undoEntry = null;
+  document.querySelector('#undoAction').disabled = true;
   notice(stockStore.isSession() ? '一時利用中です。再読込で失われるため、JSONをエクスポートしてください。' : '保存しました。');
   return true;
 }
@@ -162,10 +166,13 @@ function openModal(mode = 'add', itemIndex = -1){
     $('#expiry').value = it.expiry||'';
     $('#kcal').value = it.kcal!=null ? it.kcal : '';
     $('#editIndex').value = String(itemIndex);
+    $('#waterMode').value = it.volumeMl === undefined ? 'total' : 'bottles';
+    $('#volumeMl').value = it.volumeMl ?? 2000;
     originalExpiry = it.expiry || ''; // Save original value
   }else{
     originalExpiry = ''; // No original value for new items
   }
+  updateWaterMode();
   $('#name').focus();
 }
 
@@ -212,7 +219,7 @@ document.addEventListener('keydown', (e)=>{
     return;
   }
   if (e.key === 'Tab' && modal.classList.contains('active')) {
-    const controls = Array.from(modal.querySelectorAll('button:not([disabled]), input:not([type=hidden]), select'));
+    const controls = Array.from(modal.querySelectorAll('button:not([disabled]), input:not([type=hidden]):not([disabled]), select')).filter(el => el.getClientRects().length);
     const first = controls[0], last = controls[controls.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
@@ -231,6 +238,19 @@ $('#expiryNone').addEventListener('click', ()=>{
 /* ===============================
    Stock Form
 ==================================*/
+function updateWaterMode() {
+  const water = $('#category').value === 'water';
+  const packaged = water && $('#waterMode').value === 'bottles';
+  $('#waterModeFields').hidden = !water;
+  $('#bottleFields').hidden = !packaged;
+  $('#volumeMl').disabled = !packaged;
+  $('#volumeMl').required = packaged;
+  $('#unit').disabled = packaged;
+  $('#quantity').step = packaged ? '1' : 'any';
+}
+$('#category').addEventListener('change', updateWaterMode);
+$('#waterMode').addEventListener('change', updateWaterMode);
+updateWaterMode();
 $('#alertMonths').value = String(alertMonths);
 $('#alertMonths').addEventListener('change', e => {
   if (commitState({ ...currentState(), alertMonths: Number(e.target.value) })) renderAll();
@@ -244,7 +264,8 @@ $('#itemForm').addEventListener('submit', e => {
   try {
     item = StockCore.validateItem({
       name: $('#name').value, category: $('#category').value,
-      quantity: $('#quantity').value, unit: $('#unit').value,
+      quantity: $('#quantity').value, unit: $('#volumeMl').disabled ? $('#unit').value : 'bottle',
+      ...($('#volumeMl').disabled ? {} : { volumeMl: $('#volumeMl').value }),
       expiry: $('#expiry').value, kcal: $('#kcal').value,
       createdAt: idx >= 0 ? items[idx].createdAt : Date.now()
     });
@@ -266,7 +287,7 @@ $('#clearAll').addEventListener('click', () => {
   if (commitState({ ...currentState(), items: [] })) renderAll();
 });
 $('#exportJson').addEventListener('click', () => {
-  downloadJSON({ meta: { app: 'rollingstock-planner', ver: 2 }, ...currentState() }, 'rollingstock-data');
+  downloadJSON({ meta: { app: 'rollingstock-planner', ver: 3 }, ...currentState() }, 'rollingstock-data');
 });
 $('#exportRecovery').addEventListener('click', () => {
   const raw = stockStore.recovery();
@@ -440,6 +461,9 @@ function renderTable(){
       <td>${kcalText}</td>
       <td>${badge}</td>
       <td>
+        <button class="btn" data-use-one="${it.idx}" ${it.quantity < 1 ? 'disabled' : ''}>1使う</button>
+        <button class="btn" data-consume="${it.idx}" ${it.quantity === 0 ? 'disabled' : ''}>数量を指定して使う</button>
+        <button class="btn" data-replenish="${it.idx}">補充</button>
         <button class="btn" data-edit="${it.idx}">編集</button>
         <button class="btn danger" data-del="${it.idx}">削除</button>
       </td>
@@ -447,6 +471,9 @@ function renderTable(){
     tbody.appendChild(tr);
   }
 
+  tbody.querySelectorAll('[data-use-one]').forEach(b => b.addEventListener('click', () => performAction('consume', Number(b.dataset.useOne), 1, '')));
+  tbody.querySelectorAll('[data-consume]').forEach(b => b.addEventListener('click', () => openAction('consume', Number(b.dataset.consume))));
+  tbody.querySelectorAll('[data-replenish]').forEach(b => b.addEventListener('click', () => openAction('replenish', Number(b.dataset.replenish))));
   tbody.querySelectorAll('[data-edit]').forEach(b=>{
     b.addEventListener('click', ()=>{
       // Remove previous highlight
@@ -536,6 +563,51 @@ function labelForCategory(c){
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
+
+function performAction(kind, index, amount, expiry) {
+  const before = StockCore.validateState(currentState());
+  let candidate;
+  try { candidate = StockActions[kind](before, index, amount, expiry); }
+  catch (_) {
+    const message = '数量・期限・件数を確認してください。在庫を超える消費や、上限を超える補充はできません。';
+    $('#actionError').textContent = message; notice(message); return false;
+  }
+  if (!commitState(candidate)) { $('#actionError').textContent = $('#operationStatus').textContent; return false; }
+  undoEntry = { before, after: JSON.stringify(currentState()) };
+  $('#undoAction').disabled = false;
+  renderAll();
+  $('#undoAction').focus();
+  return true;
+}
+function openAction(kind, index) {
+  activeAction = { kind, index, before: JSON.stringify(currentState()) };
+  $('#actionTitle').textContent = kind === 'consume' ? '数量を指定して使う' : '補充';
+  $('#actionItem').textContent = items[index].name;
+  $('#actionAmount').value = '1';
+  $('#actionAmount').step = items[index].volumeMl === undefined ? 'any' : '1';
+  $('#actionExpiry').value = '';
+  $('#actionDateFields').hidden = kind !== 'replenish';
+  $('#actionRule').hidden = kind !== 'replenish';
+  $('#actionError').textContent = '';
+  $('#actionDialog').showModal();
+  $('#actionAmount').focus();
+}
+$('#cancelAction').addEventListener('click', () => $('#actionDialog').close());
+$('#actionForm').addEventListener('submit', event => {
+  event.preventDefault();
+  if (!activeAction || activeAction.before !== JSON.stringify(currentState())) {
+    $('#actionError').textContent = '在庫が変更されています。閉じてから操作をやり直してください。'; return;
+  }
+  if (performAction(activeAction.kind, activeAction.index, $('#actionAmount').value, $('#actionExpiry').value)) {
+    $('#actionDialog').close(); $('#undoAction').focus();
+  }
+});
+$('#undoAction').addEventListener('click', () => {
+  let candidate;
+  try { candidate = StockActions.undo(currentState(), undoEntry); }
+  catch (_) { notice('取り消せる操作がありません。'); return; }
+  if (commitState(candidate)) { renderAll(); $('#addItemBtn').focus(); }
+});
 function fmtNum(n){
   const v = Number(n);
   if(Number.isNaN(v)) return '—';

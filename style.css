@@ -1105,3 +1105,9 @@ small { font-size: .875rem; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+#actionDialog { width: min(34rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; color: var(--text); background: var(--card); border: 1px solid var(--line-strong); border-radius: 1rem; padding: 1.25rem; }
+#actionDialog::backdrop { background: #0009; }
+#actionDialog input { width: 100%; }
+#actionError { color: var(--bad); }
+.inline-controls { display: flex; flex-wrap: wrap; gap: .75rem; }
