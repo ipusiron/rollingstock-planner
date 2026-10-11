@@ -1111,6 +1111,8 @@ small { font-size: .875rem; }
 #actionDialog input { width: 100%; }
 #actionError { color: var(--bad); }
 .inline-controls { display: flex; flex-wrap: wrap; gap: .75rem; }
+.header-actions { display: flex; flex-wrap: wrap; align-self: flex-end; gap: .75rem; align-items: center; }
+.header-actions .theme-toggle { align-self: auto; }
 
 #shoppingBottleMl { width: 12rem; max-width: 100%; }
 #shoppingText { width: 100%; box-sizing: border-box; color: var(--text); background: var(--bg); padding: .75rem; }

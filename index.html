@@ -14,10 +14,13 @@
 <body>
   <noscript>このツールの計算と保存にはJavaScriptが必要です。有効にして再読込してください。</noscript>
   <header class="app-header">
+    <div class="header-actions">
+    <button type="button" id="languageToggle" class="btn" lang="en">English</button>
     <button class="theme-toggle" id="themeToggle" aria-label="テーマ切り替え">
       <span id="themeIcon">☀️</span>
       <span id="themeText">ライトモードへ切り替え</span>
     </button>
+    </div>
     <h1>RollingStock Planner</h1>
     <p class="tagline">家族とペットの備蓄を記録し、期限と計画量を確認するツール。</p>
   </header>
@@ -805,13 +808,13 @@
             </div>
             <div>
               <label>数量<span class="req">*</span>
-                <button type="button" class="help-icon" data-tooltip="水2Lボトル6本は合計容量12、単位Lで登録します。500mLは数量500、単位mLです。本や箱の容量は推測しません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
+                <button type="button" class="help-icon" data-tooltip="合計容量で登録する場合、2Lボトル6本は数量12・単位Lです。本数で登録する場合は数量6・1本2000mLです。箱の容量は推測しません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
               </label>
               <input type="number" id="quantity" min="0" max="1000000" step="0.01" required value="1" />
             </div>
             <div>
               <label>単位
-                <button type="button" class="help-icon" data-tooltip="数量の単位を記入します（例：個、缶、袋、L、本、箱）。水カテゴリでLまたはmLの場合だけ水量を集計します。他のカテゴリの液体は水として数えません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
+                <button type="button" class="help-icon" data-tooltip="数量の単位を記入します（例：個、缶、袋、L、本、箱）。水はL・mL、または容量を指定した本数で集計します。他のカテゴリの液体は水として数えません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
               </label>
               <input type="text" id="unit" maxlength="50" list="unitPresets" placeholder="選択または入力" />
               <datalist id="unitPresets">
@@ -880,6 +883,8 @@
   <script src="stock-core.js"></script>
   <script src="stock-actions.js"></script>
   <script src="stock-store.js"></script>
+  <script src="messages.js"></script>
+  <script src="i18n.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
