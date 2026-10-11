@@ -456,7 +456,7 @@ function renderTable(){
       <td>${escapeHtml(it.name)}</td>
       <td>${categoryBadge}</td>
       <td>${fmtNum(it.quantity)}</td>
-      <td>${escapeHtml(it.unit||'')}</td>
+      <td>${escapeHtml(it.volumeMl === undefined ? (it.unit||'') : '本（1本 ' + fmtNum(it.volumeMl) + ' mL／計 ' + fmtNum(StockCore.waterVolume(it)) + ' L）')}</td>
       <td>${it.expiry ? escapeHtml(it.expiry) : '—'}</td>
       <td>${kcalText}</td>
       <td>${badge}</td>
@@ -708,9 +708,66 @@ function drawCoverageCharts() {
 /* ===============================
    Init
 ==================================*/
+function renderShopping() {
+  let result;
+  try { result = StockActions.shopping(currentState(), $('#shoppingBottleMl').value); }
+  catch (_) {
+    $('#shoppingText').value = '1本の容量を1〜1,000,000mLの整数で入力してください。';
+    $('#shoppingPrint').textContent = $('#shoppingText').value;
+    $('#copyShopping').disabled = $('#printShopping').disabled = true;
+    return;
+  }
+  $('#copyShopping').disabled = $('#printShopping').disabled = false;
+  const numberOrUnknown = value => value === null ? '未設定／計算対象外' : fmtNum(Math.ceil(value * 100) / 100);
+  const lines = [
+    '買い物メモ（確認日 ' + StockCore.today() + '）',
+    '水：計画 ' + numberOrUnknown(result.needs.needWater) + ' L／算入した在庫 ' + fmtNum(result.totals.plannedWaterL) + ' L',
+    '水の不足：' + numberOrUnknown(result.water.shortage) + ' L',
+    '購入本数の目安：' + numberOrUnknown(result.bottles) + ' 本（1本 ' + fmtNum(result.bottleMl) + ' mL）',
+    '人用食料：計画 ' + fmtNum(result.needs.needKcal) + ' kcal／算入した在庫 ' + fmtNum(result.totals.plannedKcal) + ' kcal',
+    '人用食料の不足：' + numberOrUnknown(result.food.shortage) + ' kcal（缶数・食数への換算なし）',
+    '算入できない記録（理由は重複する場合があります）：'
+  ];
+  let excluded = 0;
+  for (const it of items) {
+    if (!it.quantity || !['water', 'food'].includes(it.category)) continue;
+    const reasons = [];
+    const status = StockCore.expiryStatus(it);
+    if (status === 'expired') reasons.push('期限切れ');
+    if (status === 'unknown') reasons.push('期限未入力');
+    if (it.category === 'water' && StockCore.waterVolume(it) === null) reasons.push('容量不明');
+    if (it.category === 'food' && it.kcal === null) reasons.push('カロリー未入力');
+    if (reasons.length) { lines.push('・' + it.name + '：' + reasons.join('、')); excluded++; }
+  }
+  if (!excluded) lines.push('該当なし');
+  lines.push('期限・保存状態・製品の表示を別に確認してください。食品の安全性や栄養の充足を保証しません。ペットフード・生活用水の必要量は計算していません。');
+  $('#shoppingText').value = lines.join('\n');
+  $('#shoppingPrint').textContent = lines.join('\n');
+}
+$('#shoppingBottleMl').addEventListener('input', () => { $('#shoppingStatus').textContent = ''; renderShopping(); });
+$('#copyShopping').addEventListener('click', async () => {
+  renderShopping();
+  if ($('#copyShopping').disabled) return;
+  try {
+    await navigator.clipboard.writeText($('#shoppingText').value);
+    $('#shoppingStatus').textContent = 'コピーしました。';
+  } catch (_) {
+    $('#shoppingText').focus(); $('#shoppingText').select();
+    $('#shoppingStatus').textContent = '自動コピーできませんでした。選択したメモを手動でコピーしてください。';
+  }
+});
+$('#printShopping').addEventListener('click', () => {
+  renderShopping();
+  if ($('#printShopping').disabled) return;
+  document.body.classList.add('print-shopping');
+  window.print();
+});
+window.addEventListener('afterprint', () => document.body.classList.remove('print-shopping'));
+
 function renderAll(){
   renderTable();
   renderAlerts();
+  renderShopping();
 }
 renderAll();
 $('#storageStatus').textContent = loadedStock.problem === 'corrupt'

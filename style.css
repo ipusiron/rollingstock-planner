@@ -1111,3 +1111,13 @@ small { font-size: .875rem; }
 #actionDialog input { width: 100%; }
 #actionError { color: var(--bad); }
 .inline-controls { display: flex; flex-wrap: wrap; gap: .75rem; }
+
+#shoppingBottleMl { width: 12rem; max-width: 100%; }
+#shoppingText { width: 100%; box-sizing: border-box; color: var(--text); background: var(--bg); padding: .75rem; }
+#shoppingPrint { display: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media print {
+  body.print-shopping { background: white; color: black; }
+  body.print-shopping > :not(main), body.print-shopping main > :not(#alerts),
+  body.print-shopping #alerts > :not(#shoppingCard), body.print-shopping #shoppingCard > :not(#shoppingPrint) { display: none !important; }
+  body.print-shopping #alerts, body.print-shopping #shoppingCard, body.print-shopping #shoppingPrint { display: block !important; color: black; background: white; border: 0; }
+}

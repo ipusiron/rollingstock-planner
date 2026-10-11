@@ -105,7 +105,8 @@
         </div>
       </div>
       <p id="stockLimits" class="note"></p>
-      <p>在庫の合計と、計画へ算入した量は異なります。水は「水」カテゴリのL・mLのみ、人用カロリーは「食料」カテゴリのみ集計します。期限切れと期限未入力は計画から除外します。</p>
+      <p>在庫の合計と、計画へ算入した量は異なります。水は「水」カテゴリのL・mL、または容量を指定した本数を集計します。人用カロリーは「食料」カテゴリのみ集計し、期限切れと期限未入力は計画から除外します。</p>
+      <p>取り消せるのは、このタブを開いてから直前に行った消費・補充1回だけです。ほかの変更を保存すると取り消せなくなります。</p>
     </section>
 
     <!-- Family Setup Tab -->
@@ -252,6 +253,19 @@
         </div>
       </div>
 
+      <div id="shoppingCard" class="card">
+        <h3>不足分の買い物メモ</h3>
+        <label for="shoppingBottleMl">買う水の1本の容量（mL）</label>
+        <input id="shoppingBottleMl" type="number" min="1" max="1000000" step="1" value="2000" required>
+        <p>保存済みの家族設定と在庫から計算します。本数は不足量を満たすよう切り上げます。食料はkcalの不足だけを示し、缶数や食数には換算しません。</p>
+        <textarea id="shoppingText" rows="12" readonly aria-label="買い物メモ"></textarea>
+        <pre id="shoppingPrint"></pre>
+        <div class="inline-controls">
+          <button id="copyShopping" class="btn" type="button">メモをコピー</button>
+          <button id="printShopping" class="btn" type="button">メモを印刷</button>
+        </div>
+        <p id="shoppingStatus" role="status"></p>
+      </div>
       <h2>提案</h2>
       <div class="card expert-advice">
         <div class="expert-header">
