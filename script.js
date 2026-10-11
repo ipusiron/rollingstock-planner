@@ -4,7 +4,7 @@
    防災備蓄管理ツール - メインスクリプト
 
    このファイルは在庫管理、家族構成設定、アラート機能、
-   AI防災アドバイザー、グラフ描画などの全機能を実装しています。
+   備蓄チェック、表示と入力イベントを実装しています。
 
    LocalStorage Keys
 ==================================*/
@@ -97,17 +97,39 @@ setTheme(currentTheme);
 /* ===============================
    Tabs
 ==================================*/
-$$('.tab').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    $$('.tab').forEach(b=>b.classList.remove('active'));
-    $$('.tab-panel').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    const id = btn.dataset.tab;
-    $('#'+id).classList.add('active');
-    // redraw charts when becoming visible
-    if(id==='alerts') drawCoverageCharts();
-    if(id==='stock') drawCategoryChart();
+const tabs = $$('.tab');
+function activateTab(btn, focus = false) {
+  tabs.forEach(tab => {
+    const selected = tab === btn;
+    tab.classList.toggle('active', selected);
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    const panel = $('#' + tab.dataset.tab);
+    panel.classList.toggle('active', selected);
+    panel.hidden = !selected;
   });
+  if (focus) btn.focus();
+}
+tabs.forEach((btn, index) => {
+  btn.id = 'tab-' + btn.dataset.tab;
+  btn.setAttribute('aria-controls', btn.dataset.tab);
+  $('#' + btn.dataset.tab).setAttribute('aria-labelledby', btn.id);
+  btn.addEventListener('click', () => activateTab(btn));
+  btn.addEventListener('keydown', event => {
+    let nextIndex;
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+    if (event.key === 'ArrowLeft') nextIndex = (index + tabs.length - 1) % tabs.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = tabs.length - 1;
+    if (nextIndex !== undefined) { event.preventDefault(); activateTab(tabs[nextIndex], true); }
+  });
+});
+activateTab(tabs[0]);
+// Associate existing form labels without changing their help-button content.
+$$('label').forEach(label => {
+  if (label.htmlFor || label.querySelector('input')) return;
+  const control = label.parentElement.querySelector('input, select');
+  if (control && control.id) label.htmlFor = control.id;
 });
 
 /* ===============================
@@ -115,6 +137,7 @@ $$('.tab').forEach(btn=>{
 ==================================*/
 const modal = $('#itemModal');
 const modalTitle = $('#modalTitle');
+let modalOpener;
 let originalExpiry = ''; // Store original expiry value for reset
 
 function openModal(mode = 'add', itemIndex = -1){
@@ -124,9 +147,11 @@ function openModal(mode = 'add', itemIndex = -1){
     modalTitle.textContent = 'アイテム追加';
   }
 
+  modalOpener = document.activeElement;
   $('#itemError').textContent = '';
   modal.classList.add('active');
-  document.body.style.overflow = 'hidden'; // Prevent background scroll
+  document.body.classList.add('modal-open');
+  $$('body > header, body > nav, body > main, body > footer').forEach(el => { el.inert = true; });
 
   if(mode === 'edit' && itemIndex >= 0){
     const it = items[itemIndex];
@@ -141,11 +166,14 @@ function openModal(mode = 'add', itemIndex = -1){
   }else{
     originalExpiry = ''; // No original value for new items
   }
+  $('#name').focus();
 }
 
 function closeModal(){
   modal.classList.remove('active');
-  document.body.style.overflow = ''; // Restore scroll
+  document.body.classList.remove('modal-open');
+  $$('body > header, body > nav, body > main, body > footer').forEach(el => { el.inert = false; });
+  (modalOpener?.isConnected ? modalOpener : $('#addItemBtn')).focus();
 
   // Reset form and remove editing highlight
   $('#itemForm').reset();
@@ -174,8 +202,20 @@ modal.addEventListener('click', (e)=>{
 
 // Close modal on Esc key
 document.addEventListener('keydown', (e)=>{
+  if (e.key === 'Escape' && $('#helpPopover').matches(':popover-open')) {
+    e.preventDefault();
+    $('#helpPopover').hidePopover();
+    return;
+  }
   if(e.key === 'Escape' && modal.classList.contains('active')){
     closeModal();
+    return;
+  }
+  if (e.key === 'Tab' && modal.classList.contains('active')) {
+    const controls = Array.from(modal.querySelectorAll('button:not([disabled]), input:not([type=hidden]), select'));
+    const first = controls[0], last = controls[controls.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 });
 
@@ -218,6 +258,7 @@ $('#itemForm').addEventListener('submit', e => {
   }
   closeModal();
   renderAll();
+  $('#addItemBtn').focus();
 });
 
 $('#clearAll').addEventListener('click', () => {
@@ -445,11 +486,11 @@ function updatePagination(totalPages){
   }
 
   if(totalPages <= 1){
-    pagination.style.display = 'none';
+    pagination.hidden = true;
     return;
   }
 
-  pagination.style.display = 'flex';
+  pagination.hidden = false;
   pagination.innerHTML = `
     <button class="btn" id="prevPage" ${currentPage <= 1 ? 'disabled' : ''}>前へ</button>
     <span class="page-info">${currentPage} / ${totalPages} ページ</span>
@@ -620,21 +661,20 @@ window.addEventListener('resize', ()=>{
   checkTableScroll();
 });
 
-// Mobile: Toggle tooltip on tap
-document.addEventListener('click', (e)=>{
-  if(e.target.classList.contains('help-icon')){
-    e.preventDefault();
-    e.stopPropagation();
-    // Toggle active class
-    const wasActive = e.target.classList.contains('active');
-    // Remove active from all help icons
-    $$('.help-icon').forEach(icon => icon.classList.remove('active'));
-    // Toggle current icon
-    if(!wasActive){
-      e.target.classList.add('active');
-    }
-  }else{
-    // Close all tooltips when clicking outside
-    $$('.help-icon').forEach(icon => icon.classList.remove('active'));
-  }
+// A shared native popover keeps explanations inside the viewport.
+const helpPopover = $('#helpPopover');
+$$('.help-icon').forEach(button => {
+  button.addEventListener('click', () => {
+    helpPopover.textContent = button.dataset.tooltip;
+    helpPopover.showPopover();
+  });
 });
+$('#storageOptions').open = Boolean(loadedStock.problem);
+let renderedDay = StockCore.today();
+function refreshDay() {
+  const day = StockCore.today();
+  if (day !== renderedDay) { renderedDay = day; renderAll(); }
+}
+window.addEventListener('focus', refreshDay);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshDay(); });
+setInterval(refreshDay, 60000);
