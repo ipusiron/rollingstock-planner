@@ -18,19 +18,12 @@ const LS_THEME = 'rsp_theme';              // テーマ設定（dark/light）
 
    アプリケーションの状態を保持するグローバル変数
 ==================================*/
-// 備蓄アイテムリスト（起動時にLocalStorageから読み込み＋検証）
-let items = validateItems(loadJSON(LS_ITEMS, []));
-
-// 警告閾値（月数）デフォルト2ヶ月
-let alertMonths = validateAlertMonths(parseInt(localStorage.getItem(LS_ALERT_MONTHS) || '2', 10));
-
-// 家族構成（人間：成人/子ども/高齢者、ペット：犬/猫、想定日数）
-let family = validateFamily(loadJSON(LS_FAMILY, {
-  adults: 1, children: 0, seniors: 0,
-  dogs: 0, cats: 0, days: 7
-}));
-
-// Chart.jsインスタンス（カテゴリ別円グラフ、水充足率棒グラフ、カロリー充足率棒グラフ）
+const stockStore = StockStore.create(() => window.localStorage);
+const loadedStock = stockStore.load();
+let items = loadedStock.data.items;
+let family = loadedStock.data.family;
+let alertMonths = loadedStock.data.alertMonths;
+let importing = false;
 let categoryChart, waterChart, kcalChart;
 
 // ページネーション設定
@@ -43,81 +36,30 @@ let currentPage = 1;         // 現在のページ番号
    LocalStorageの読み書き、日付操作などのユーティリティ関数
 ==================================*/
 
-/**
- * LocalStorageからJSONデータを読み込む
- * @param {string} key - LocalStorageのキー
- * @param {*} def - デフォルト値（読み込み失敗時）
- * @returns {*} パースされたデータまたはデフォルト値
- */
-function loadJSON(key, def) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? def; }
-  catch { return def; }
-}
-
-/**
- * LocalStorageにJSONデータを保存
- * @param {string} key - LocalStorageのキー
- * @param {*} val - 保存する値（JSON.stringifyされる）
- */
-function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
-
-/* ===============================
-   Validation Functions
-
-   XSS対策・データ整合性確保のための検証関数
-   インポート時やLocalStorage読み込み時に使用
-==================================*/
-
-/**
- * アイテムデータの検証とサニタイズ
- * - カテゴリをホワイトリストで検証
- * - 文字列長を制限（XSS対策）
- * - 数値の範囲チェック
- * @param {Array} data - 検証するアイテム配列
- * @returns {Array} 検証済みアイテム配列
- */
-function validateItems(data) {
-  if(!Array.isArray(data)) return [];
-  const validCategories = ['food', 'water', 'medicine', 'pet-food', 'daily', 'tool', 'other'];
-  return data.filter(item => item && typeof item === 'object').map(item => ({
-    name: String(item.name || '').trim().substring(0, 200),    // 最大200文字
-    category: validCategories.includes(item.category) ? item.category : 'other',
-    quantity: Math.max(0, parseFloat(item.quantity) || 0),     // 非負数
-    unit: String(item.unit || '').trim().substring(0, 50),     // 最大50文字
-    expiry: String(item.expiry || '').substring(0, 20),        // ISO 8601形式
-    kcal: item.kcal != null ? Math.max(0, parseFloat(item.kcal) || 0) : null,
-    createdAt: Number(item.createdAt) || Date.now()
-  })).filter(item => item.name);  // 名前なしは除外
-}
-
-/**
- * 家族構成データの検証
- * - 各人数を0〜100人に制限
- * - 想定日数を許可された値のみに制限
- * @param {Object} data - 検証する家族構成データ
- * @returns {Object} 検証済み家族構成データ
- */
-function validateFamily(data) {
-  if(!data || typeof data !== 'object') {
-    return { adults: 1, children: 0, seniors: 0, dogs: 0, cats: 0, days: 7 };
+// Persist the complete candidate before replacing any in-memory state.
+function notice(message) { document.querySelector('#operationStatus').textContent = message; }
+function commitState(candidate, replacing = false) {
+  let data;
+  try { data = stockStore.save(candidate, replacing); }
+  catch (error) {
+    notice(error.message === 'conflict'
+      ? '別のタブでデータが変更されました。現在の入力を控えてから再読込してください。保存は行っていません。'
+      : '保存できませんでした。入力と保存済みデータは変更していません。容量や入力値を確認し、必要ならJSONをエクスポートしてください。');
+    return false;
   }
-  return {
-    adults: Math.max(0, Math.min(100, parseInt(data.adults, 10) || 0)),
-    children: Math.max(0, Math.min(100, parseInt(data.children, 10) || 0)),
-    seniors: Math.max(0, Math.min(100, parseInt(data.seniors, 10) || 0)),
-    dogs: Math.max(0, Math.min(100, parseInt(data.dogs, 10) || 0)),
-    cats: Math.max(0, Math.min(100, parseInt(data.cats, 10) || 0)),
-    days: [3, 7, 14, 30, 180].includes(parseInt(data.days, 10)) ? parseInt(data.days, 10) : 7
-  };
+  ({ items, family, alertMonths } = data);
+  notice(stockStore.isSession() ? '一時利用中です。再読込で失われるため、JSONをエクスポートしてください。' : '保存しました。');
+  return true;
 }
-
-/**
- * 警告閾値（月数）の検証
- * @param {number} value - 検証する値
- * @returns {number} 1/2/3/6のいずれか（デフォルト2）
- */
-function validateAlertMonths(value) {
-  return [1, 2, 3, 6].includes(value) ? value : 2;
+function currentState() { return { items, family, alertMonths }; }
+function downloadJSON(data, prefix) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = prefix + '-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -187,39 +129,17 @@ const $$ = sel => Array.from(document.querySelectorAll(sel));
 
    ダーク/ライトモードの切り替え機能
 ==================================*/
-// 現在のテーマ（デフォルト: dark）
-let currentTheme = localStorage.getItem(LS_THEME) || 'dark';
-
-function setTheme(theme){
-  currentTheme = theme;
-  document.body.setAttribute('data-theme', theme);
-  localStorage.setItem(LS_THEME, theme);
-
-  const icon = $('#themeIcon');
-  const text = $('#themeText');
-  // Show the NEXT theme (what it will switch TO)
-  if(theme === 'light'){
-    // Currently light, will switch to dark
-    icon.textContent = '🌙';
-    text.textContent = 'ダークモードへ切り替え';
-  }else{
-    // Currently dark, will switch to light
-    icon.textContent = '☀️';
-    text.textContent = 'ライトモードへ切り替え';
-  }
-
-  // Re-render charts with new theme colors
-  setTimeout(()=>{
-    drawCategoryChart();
-    drawCoverageCharts();
-  }, 100);
+// Theme preferences must not prevent use when Storage is blocked.
+let currentTheme = document.documentElement.dataset.theme || 'light';
+function setTheme(theme) {
+  currentTheme = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = currentTheme;
+  document.body.dataset.theme = currentTheme;
+  try { localStorage.setItem(LS_THEME, currentTheme); } catch (_) { /* Optional preference. */ }
+  $('#themeIcon').textContent = currentTheme === 'light' ? '🌙' : '☀️';
+  $('#themeText').textContent = currentTheme === 'light' ? 'ダークモードへ切り替え' : 'ライトモードへ切り替え';
 }
-
-$('#themeToggle').addEventListener('click', ()=>{
-  setTheme(currentTheme === 'dark' ? 'light' : 'dark');
-});
-
-// Initialize theme on load
+$('#themeToggle').addEventListener('click', () => setTheme(currentTheme === 'dark' ? 'light' : 'dark'));
 setTheme(currentTheme);
 
 /* ===============================
@@ -252,6 +172,7 @@ function openModal(mode = 'add', itemIndex = -1){
     modalTitle.textContent = 'アイテム追加';
   }
 
+  $('#itemError').textContent = '';
   modal.classList.add('active');
   document.body.style.overflow = 'hidden'; // Prevent background scroll
 
@@ -319,132 +240,74 @@ $('#expiryNone').addEventListener('click', ()=>{
    Stock Form
 ==================================*/
 $('#alertMonths').value = String(alertMonths);
-$('#alertMonths').addEventListener('change', e=>{
-  alertMonths = parseInt(e.target.value,10);
-  localStorage.setItem(LS_ALERT_MONTHS, String(alertMonths));
-  renderTable();
-  renderAlerts();
+$('#alertMonths').addEventListener('change', e => {
+  if (commitState({ ...currentState(), alertMonths: Number(e.target.value) })) renderAll();
+  e.target.value = String(alertMonths);
 });
 
-$('#itemForm').addEventListener('submit', e=>{
+$('#itemForm').addEventListener('submit', e => {
   e.preventDefault();
-  const idx = $('#editIndex').value !== '' ? parseInt($('#editIndex').value,10) : -1;
-
-  // Validate and sanitize inputs
-  const validCategories = ['food', 'water', 'medicine', 'pet-food', 'daily', 'tool', 'other'];
-  const category = validCategories.includes($('#category').value) ? $('#category').value : 'other';
-
-  const obj = {
-    name: $('#name').value.trim().substring(0, 200), // Max length 200
-    category: category,
-    quantity: Math.max(0, parseFloat($('#quantity').value || '0')),
-    unit: $('#unit').value.trim().substring(0, 50), // Max length 50
-    expiry: $('#expiry').value || '',
-    kcal: $('#kcal').value ? Math.max(0, parseFloat($('#kcal').value)) : null,
-    createdAt: Date.now()
-  };
-  if(!obj.name || isNaN(obj.quantity)) return;
-
-  if(idx >= 0){ items[idx] = obj; } else { items.push(obj); }
-  saveJSON(LS_ITEMS, items);
-
-  closeModal(); // Close modal after save
-  renderAll();
-});
-
-$('#clearAll').addEventListener('click', ()=>{
-  if(!confirm('在庫データを全削除します。よろしいですか？')) return;
-  items = [];
-  saveJSON(LS_ITEMS, items);
-  renderAll();
-});
-
-$('#exportJson').addEventListener('click', ()=>{
-  const data = {
-    meta: { app: 'rollingstock-planner', ver: 1 },
-    items, family, alertMonths
-  };
-
-  // Generate filename with timestamp
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const MM = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const HH = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  const timestamp = `${yyyy}${MM}${dd}_${HH}${mm}${ss}`;
-  const filename = `rollingstock-data_${timestamp}.json`;
-
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
-});
-
-$('#importJson').addEventListener('change', async (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-
-  // File size check (max 10MB)
-  if(file.size > 10 * 1024 * 1024){
-    alert('ファイルサイズが大きすぎます（最大10MB）。');
-    e.target.value = '';
+  const idx = $('#editIndex').value === '' ? -1 : Number($('#editIndex').value);
+  let item;
+  try {
+    item = StockCore.validateItem({
+      name: $('#name').value, category: $('#category').value,
+      quantity: $('#quantity').value, unit: $('#unit').value,
+      expiry: $('#expiry').value, kcal: $('#kcal').value,
+      createdAt: idx >= 0 ? items[idx].createdAt : Date.now()
+    });
+  } catch (_) { $('#itemError').textContent = '名前、数量、単位、期限、カロリーの入力を確認してください。'; return; }
+  const nextItems = items.slice();
+  if (idx >= 0) nextItems[idx] = item;
+  else nextItems.push(item);
+  if (!commitState({ ...currentState(), items: nextItems })) {
+    $('#itemError').textContent = $('#operationStatus').textContent;
     return;
   }
-
-  try{
-    const text = await file.text();
-    const data = JSON.parse(text);
-
-    // Validate and sanitize items
-    const validCategories = ['food', 'water', 'medicine', 'pet-food', 'daily', 'tool', 'other'];
-    if(Array.isArray(data.items)){
-      items = data.items.filter(item => item && typeof item === 'object').map(item => ({
-        name: String(item.name || '').trim().substring(0, 200),
-        category: validCategories.includes(item.category) ? item.category : 'other',
-        quantity: Math.max(0, parseFloat(item.quantity) || 0),
-        unit: String(item.unit || '').trim().substring(0, 50),
-        expiry: String(item.expiry || '').substring(0, 20),
-        kcal: item.kcal != null ? Math.max(0, parseFloat(item.kcal) || 0) : null,
-        createdAt: Number(item.createdAt) || Date.now()
-      })).filter(item => item.name); // Remove items without name
-    }
-
-    // Validate and sanitize family data
-    if(data.family && typeof data.family === 'object'){
-      family = {
-        adults: Math.max(0, Math.min(100, parseInt(data.family.adults, 10) || 0)),
-        children: Math.max(0, Math.min(100, parseInt(data.family.children, 10) || 0)),
-        seniors: Math.max(0, Math.min(100, parseInt(data.family.seniors, 10) || 0)),
-        dogs: Math.max(0, Math.min(100, parseInt(data.family.dogs, 10) || 0)),
-        cats: Math.max(0, Math.min(100, parseInt(data.family.cats, 10) || 0)),
-        days: [3, 7, 14, 30, 180].includes(parseInt(data.family.days, 10)) ? parseInt(data.family.days, 10) : 7
-      };
-    }
-
-    // Validate alertMonths
-    if(typeof data.alertMonths === 'number'){
-      alertMonths = [1, 2, 3, 6].includes(data.alertMonths) ? data.alertMonths : 2;
-    }
-
-    saveJSON(LS_ITEMS, items);
-    saveJSON(LS_FAMILY, family);
-    localStorage.setItem(LS_ALERT_MONTHS, String(alertMonths));
-    // update forms
-    hydrateFamilyForm();
-    $('#alertMonths').value = String(alertMonths);
-    renderAll();
-    alert('インポートしました。');
-  }catch(err){
-    alert('JSONの読み込みに失敗しました。');
-  }finally{
-    e.target.value = '';
-  }
+  closeModal();
+  renderAll();
 });
+
+$('#clearAll').addEventListener('click', () => {
+  if (!confirm('在庫データを全削除します。先にJSONをエクスポートしてください。削除しますか？')) return;
+  if (commitState({ ...currentState(), items: [] })) renderAll();
+});
+$('#exportJson').addEventListener('click', () => {
+  downloadJSON({ meta: { app: 'rollingstock-planner', ver: 2 }, ...currentState() }, 'rollingstock-data');
+});
+$('#exportRecovery').addEventListener('click', () => {
+  const raw = stockStore.recovery();
+  if (raw) downloadJSON(raw, 'rollingstock-recovery-raw');
+  else notice('保存領域にアクセスできず、元データを取得できません。');
+});
+$('#enableSession').addEventListener('click', () => {
+  if (!confirm('このタブ内だけで一時利用します。再読込やタブを閉じると変更は失われます。続けますか？')) return;
+  stockStore.useSession();
+  $('#storageStatus').textContent = '一時利用中：変更は保存されません。終了前にJSONをエクスポートしてください。';
+  notice('一時利用に切り替えました。保存できなかった操作は、入力を確認して再実行してください。');
+});
+$('#importJson').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file || importing) return;
+  importing = true;
+  const before = JSON.stringify(currentState());
+  try {
+    if (file.size > StockCore.MAX_FILE_BYTES) throw new Error('size');
+    const candidate = StockCore.validateState(JSON.parse(await file.text()));
+    if (before !== JSON.stringify(currentState())) throw new Error('changed');
+    if (!confirm(candidate.items.length + '件の在庫と家族設定で置き換えます。現在のデータをエクスポート済みですか？')) return;
+    if (commitState(candidate, true)) {
+      currentPage = 1;
+      hydrateFamilyForm();
+      $('#alertMonths').value = String(alertMonths);
+      renderAll();
+    }
+  } catch (_) {
+    notice('インポートできませんでした。最大10MB・5000件、形式、数値、日付を確認してください。読込中に編集した場合も取り込みません。既存データは変更していません。');
+  } finally { importing = false; e.target.value = ''; }
+});
+
+
 
 $('#search').addEventListener('input', ()=>{
   currentPage = 1; // Reset to first page on search
@@ -458,35 +321,23 @@ $('#sort').addEventListener('change', renderTable);
 /* ===============================
    Family Setup
 ==================================*/
-function hydrateFamilyForm(){
-  $('#adults').value = family.adults;
-  $('#children').value = family.children;
-  $('#seniors').value = family.seniors;
-  $('#dogs').value = family.dogs;
-  $('#cats').value = family.cats;
-  $('#days').value = family.days;
+const familyFields = ['adults', 'children', 'seniors', 'dogs', 'cats', 'days',
+  'waterPerPerson', 'adultKcal', 'childKcal', 'seniorKcal', 'dogWater', 'catWater'];
+function hydrateFamilyForm() {
+  familyFields.forEach(key => { $('#' + key).value = family[key] ?? ''; });
 }
 hydrateFamilyForm();
-
-$('#familyForm').addEventListener('submit', e=>{
+$('#familyForm').addEventListener('submit', e => {
   e.preventDefault();
-  family = {
-    adults: parseInt($('#adults').value||'0',10),
-    children: parseInt($('#children').value||'0',10),
-    seniors: parseInt($('#seniors').value||'0',10),
-    dogs: parseInt($('#dogs').value||'0',10),
-    cats: parseInt($('#cats').value||'0',10),
-    days: parseInt($('#days').value||'7',10)
-  };
-  saveJSON(LS_FAMILY, family);
-  renderAll();
+  let candidate;
+  try {
+    candidate = StockCore.validateFamily(Object.fromEntries(familyFields.map(key => [key, $('#' + key).value])));
+  } catch (_) { notice('人数は0〜100の整数、日数と計画値は入力欄の範囲で指定してください。'); return; }
+  if (commitState({ ...currentState(), family: candidate })) { hydrateFamilyForm(); renderAll(); }
 });
-
-$('#resetFamily').addEventListener('click', ()=>{
-  family = { adults:1, children:0, seniors:0, dogs:0, cats:0, days:7 };
-  saveJSON(LS_FAMILY, family);
-  hydrateFamilyForm();
-  renderAll();
+$('#resetFamily').addEventListener('click', () => {
+  if (!confirm('家族構成と計画値を初期値に戻しますか？')) return;
+  if (commitState({ ...currentState(), family: StockCore.defaults() })) { hydrateFamilyForm(); renderAll(); }
 });
 
 /* ===============================
@@ -688,9 +539,8 @@ function renderTable(){
     b.addEventListener('click', ()=>{
       const i = parseInt(b.dataset.del,10);
       if(!confirm(`「${items[i].name}」を削除します。よろしいですか？`)) return;
-      items.splice(i,1);
-      saveJSON(LS_ITEMS, items);
-      renderAll();
+      const nextItems = items.filter((_, index) => index !== i);
+      if (commitState({ ...currentState(), items: nextItems })) renderAll();
     });
   });
 
@@ -1016,6 +866,7 @@ function getChartTextColor(){
 }
 
 function drawCategoryChart(){
+  if (typeof Chart === 'undefined') return;
   const ctx = $('#categoryChart');
   if(!ctx) return;
 
@@ -1061,6 +912,7 @@ function drawCategoryChart(){
 }
 
 function drawCoverageCharts(){
+  if (typeof Chart === 'undefined') return;
   const cov = coverage();
   const wctx = $('#waterChart');
   const kctx = $('#kcalChart');
@@ -1128,6 +980,17 @@ function renderAll(){
   renderAlerts();
 }
 renderAll();
+$('#storageStatus').textContent = loadedStock.problem === 'corrupt'
+  ? '保存データの形式を確認できません。元データは変更していません。「元データを救出」で保管し、正しいJSONをインポートするか、一時利用を選んでください。'
+  : loadedStock.problem === 'unavailable'
+    ? '保存領域を利用できません。保存する操作は停止しています。一時利用を選ぶと、このタブ内だけで操作できます。'
+    : loadedStock.legacy
+      ? '保存済みの在庫を読み込みました。計画水量は1人1日3L、ペットの水量は未設定です。単位と計画値を確認してください。元の保存キーは変更しません。'
+      : 'このブラウザーに保存します。定期的にJSONをエクスポートしてください。';
+window.addEventListener('storage', event => {
+  if ([StockStore.KEY, ...StockStore.LEGACY].includes(event.key) || event.key === null)
+    notice('別のタブで保存データが変更されました。未保存の入力を控えてから再読込してください。');
+});
 
 /* ===============================
    Minor helpers

@@ -33,6 +33,14 @@
   </nav>
 
   <main>
+    <aside class="card storage-notice" aria-label="保存状態">
+      <p id="storageStatus" role="status"></p>
+      <p id="operationStatus" role="status" aria-live="polite"></p>
+      <div class="storage-actions">
+        <button type="button" id="enableSession" class="btn">保存せず一時利用</button>
+        <button type="button" id="exportRecovery" class="btn">元データを救出</button>
+      </div>
+    </aside>
     <!-- Stock Tab -->
     <section id="stock" class="tab-panel active" role="tabpanel">
       <div class="panel-header">
@@ -108,19 +116,19 @@
               <label>成人（18–64歳）
                 <span class="help-icon" data-tooltip="18歳から64歳までの人数を入力します。1人あたり1日4Lの水と2000kcalで計算します。">?</span>
               </label>
-              <input type="number" id="adults" min="0" value="1" />
+              <input type="number" id="adults" min="0" max="100" step="1" required value="1" />
             </div>
             <div>
               <label>子ども（0–17歳）
                 <span class="help-icon" data-tooltip="0歳から17歳までの人数を入力します。1人あたり1日2Lの水と1400kcalで計算します。">?</span>
               </label>
-              <input type="number" id="children" min="0" value="0" />
+              <input type="number" id="children" min="0" max="100" step="1" required value="0" />
             </div>
             <div>
               <label>高齢者（65歳以上）
                 <span class="help-icon" data-tooltip="65歳以上の人数を入力します。1人あたり1日3Lの水と1800kcalで計算します。">?</span>
               </label>
-              <input type="number" id="seniors" min="0" value="0" />
+              <input type="number" id="seniors" min="0" max="100" step="1" required value="0" />
             </div>
           </div>
         </div>
@@ -132,13 +140,13 @@
               <label>犬（頭数）
                 <span class="help-icon" data-tooltip="飼育している犬の頭数を入力します。1頭あたり1日1Lの水で計算します。">?</span>
               </label>
-              <input type="number" id="dogs" min="0" value="0" />
+              <input type="number" id="dogs" min="0" max="100" step="1" required value="0" />
             </div>
             <div>
               <label>猫（頭数）
                 <span class="help-icon" data-tooltip="飼育している猫の頭数を入力します。1頭あたり1日0.3Lの水で計算します。">?</span>
               </label>
-              <input type="number" id="cats" min="0" value="0" />
+              <input type="number" id="cats" min="0" max="100" step="1" required value="0" />
             </div>
           </div>
         </div>
@@ -160,6 +168,18 @@
             </div>
           </div>
         </div>
+        <fieldset class="family-section">
+          <legend>1日あたりの計画値</legend>
+          <p>水は飲料と調理用の目安です。生活用水は別に備えてください。カロリーの初期値は計算例であり、年齢、体格、健康状態に応じた栄養の必要量ではありません。ペットの水量は普段の使用量などから設定してください。</p>
+          <div class="grid">
+            <div><label for="waterPerPerson">人1人の水（L）</label><input id="waterPerPerson" type="number" min="0" max="100" step="0.01" required></div>
+            <div><label for="adultKcal">成人1人の計画カロリー（kcal）</label><input id="adultKcal" type="number" min="0" max="10000" step="1" required></div>
+            <div><label for="childKcal">子ども1人の計画カロリー（kcal）</label><input id="childKcal" type="number" min="0" max="10000" step="1" required></div>
+            <div><label for="seniorKcal">高齢者1人の計画カロリー（kcal）</label><input id="seniorKcal" type="number" min="0" max="10000" step="1" required></div>
+            <div><label for="dogWater">犬1頭の水（L、未設定可）</label><input id="dogWater" type="number" min="0" max="100" step="0.01" placeholder="普段の使用量を入力"></div>
+            <div><label for="catWater">猫1頭の水（L、未設定可）</label><input id="catWater" type="number" min="0" max="100" step="0.01" placeholder="普段の使用量を入力"></div>
+          </div>
+        </fieldset>
         <div class="right">
           <button type="submit" class="btn primary">計算して保存</button>
           <button type="button" id="resetFamily" class="btn">初期化</button>
@@ -731,10 +751,11 @@
       </div>
       <div class="modal-body">
         <form id="itemForm">
+          <p id="itemError" role="alert"></p>
           <div class="grid">
             <div>
               <label>品名<span class="req">*</span></label>
-              <input type="text" id="name" required placeholder="例: 2Lペットボトル水 / ツナ缶" />
+              <input type="text" id="name" maxlength="200" required placeholder="例: 2Lペットボトル水 / ツナ缶" />
             </div>
             <div>
               <label>カテゴリ</label>
@@ -752,13 +773,13 @@
               <label>数量<span class="req">*</span>
                 <span class="help-icon" data-tooltip="在庫の個数や容量を入力します。2Lペットボトル6本なら「6」と入力し、単位に「L」または「本」を入力してください。">?</span>
               </label>
-              <input type="number" id="quantity" min="0" step="0.01" required value="1" />
+              <input type="number" id="quantity" min="0" max="1000000" step="0.01" required value="1" />
             </div>
             <div>
               <label>単位
                 <span class="help-icon" data-tooltip="数量の単位を記入します（例：個、缶、袋、L、本、箱）。水の場合「L」にすると自動で水の在庫として計算されます。">?</span>
               </label>
-              <input type="text" id="unit" list="unitPresets" placeholder="選択または入力" />
+              <input type="text" id="unit" maxlength="50" list="unitPresets" placeholder="選択または入力" />
               <datalist id="unitPresets">
                 <option value="個">個</option>
                 <option value="缶">缶</option>
@@ -789,7 +810,7 @@
               <label>カロリー（1単位あたり, kcal）
                 <span class="help-icon" data-tooltip="食品1個あたりのカロリーを入力すると、家族の必要カロリーに対する充足率を自動計算します。缶詰やレトルト食品のパッケージに記載されています。">?</span>
               </label>
-              <input type="number" id="kcal" min="0" step="1" placeholder="食品のみ任意" />
+              <input type="number" id="kcal" min="0" max="1000000" step="1" placeholder="食品のみ任意" />
             </div>
           </div>
           <div class="right">
@@ -802,6 +823,8 @@
     </div>
   </div>
 
+  <script src="stock-core.js"></script>
+  <script src="stock-store.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
