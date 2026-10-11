@@ -330,6 +330,14 @@ $('#search').addEventListener('input', ()=>{
   renderTable();
 });
 $('#sort').addEventListener('change', renderTable);
+$('#reviewFilter').addEventListener('change', () => { currentPage = 1; renderTable(); });
+$('#resetFilters').addEventListener('click', () => {
+  $('#search').value = '';
+  $('#reviewFilter').value = 'all';
+  currentPage = 1;
+  renderTable();
+  $('#search').focus();
+});
 
 // Allow past dates for expiry input (e.g., already expired items)
 // No minimum date restriction
@@ -389,6 +397,8 @@ function renderTable(){
       return [it.name, it.category, StockMessages.ja[it.category], StockMessages.en[it.category], it.unit].filter(Boolean).some(s=>String(s).toLowerCase().includes(q));
     });
   }
+  filtered = filtered.filter(it => StockCore.matchesReview(it, $('#reviewFilter').value, day, alertMonths));
+  $('#reviewCount').textContent = t('reviewCount', { matched: filtered.length, total: items.length });
 
   filtered.sort((a,b)=>{
     const da = a.expiry ? parseDate(a.expiry) : null;
@@ -459,7 +469,7 @@ function renderTable(){
       <td>${escapeHtml(it.volumeMl === undefined ? (it.unit||'') : t('bottleUnit', { ml: fmtNum(it.volumeMl), liters: fmtNum(StockCore.waterVolume(it)) }))}</td>
       <td>${it.expiry ? escapeHtml(it.expiry) : '—'}<small class="expiry-type">${escapeHtml(labelForExpiryType(it.expiryType))}</small></td>
       <td>${kcalText}</td>
-      <td>${badge}</td>
+      <td>${badge}<small class="review-reasons">${escapeHtml(StockCore.reviewReasons(it, day, alertMonths).map(labelForReview).join(t('join')))}</small></td>
       <td>
         <button class="btn" data-use-one="${it.idx}" ${it.quantity < 1 ? 'disabled' : ''}>${t('useOne')}</button>
         <button class="btn" data-consume="${it.idx}" ${it.quantity === 0 ? 'disabled' : ''}>${t('consume')}</button>
@@ -564,6 +574,11 @@ function labelForExpiryType(type) {
   const labels = { unspecified: t('type_unspecified'), 'best-before': t('type_best-before'),
     'use-by': t('type_use-by'), expiration: t('type_expiration') };
   return labels[type ?? 'unspecified'];
+}
+function labelForReview(reason) {
+  const labels = { expired: t('expired'), near: t('reviewNear'), undated: t('unknown'),
+    untyped: t('reviewUntyped'), volume: t('reviewVolume'), calories: t('reviewCalories'), zero: t('reviewZero') };
+  return labels[reason];
 }
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));

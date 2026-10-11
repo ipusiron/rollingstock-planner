@@ -517,6 +517,17 @@
   const ja = {}, en = {};
   pairs.forEach(([source, translation], index) => { ja['s' + index] = source; en['s' + index] = translation; });
   const dynamic = {
+  "reviewLabel": ["見直し対象", "Review records"],
+  "reviewAll": ["すべての在庫", "All inventory"],
+  "reviewAny": ["見直し対象すべて（数量0を除く）", "All review items (excluding zero quantity)"],
+  "reviewNear": ["本日期限・期限間近", "Due today or soon"],
+  "reviewUntyped": ["期限の種類が未指定", "Date type unspecified"],
+  "reviewVolume": ["水の容量不明", "Water volume unknown"],
+  "reviewCalories": ["食料のカロリー未入力", "Food calories missing"],
+  "reviewZero": ["数量0", "Zero quantity"],
+  "reviewReset": ["検索・絞り込みを解除", "Clear search and filter"],
+  "reviewHelp": ["検索と組み合わせて絞り込みます。期限間近の範囲はシステム設定に従います。集計・アラート・買い物メモは常に在庫全体が対象です。安全性の判定ではありません。", "Combine this filter with search. The alert threshold in Settings defines dates due soon. Totals, alerts and the shopping memo always use the entire inventory. This is not a safety assessment."],
+  "reviewCount": ["該当 {matched} 件 / 全 {total} 件（ページ分割前）", "Matching {matched} of {total} records (before pagination)"],
   "dateSortAsc": ["期限 早い順", "Date: earliest first"],
   "dateSortDesc": ["期限 遅い順", "Date: latest first"],
   "dateLabel": ["期限の日付", "Label date"],

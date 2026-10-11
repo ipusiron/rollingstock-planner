@@ -68,6 +68,23 @@
         </select>
       </div>
 
+      <div class="review-controls">
+        <label for="reviewFilter">見直し対象</label>
+        <select id="reviewFilter" aria-describedby="reviewHelp">
+          <option value="all">すべての在庫</option>
+          <option value="review">見直し対象すべて（数量0を除く）</option>
+          <option value="expired">期限切れ</option>
+          <option value="near">本日期限・期限間近</option>
+          <option value="undated">期限未入力</option>
+          <option value="untyped">期限の種類が未指定</option>
+          <option value="volume">水の容量不明</option>
+          <option value="calories">食料のカロリー未入力</option>
+          <option value="zero">数量0</option>
+        </select>
+        <button id="resetFilters" type="button" class="btn">検索・絞り込みを解除</button>
+      </div>
+      <p id="reviewHelp" class="note">検索と組み合わせて絞り込みます。期限間近の範囲はシステム設定に従います。集計・アラート・買い物メモは常に在庫全体が対象です。安全性の判定ではありません。</p>
+      <p id="reviewCount" role="status"></p>
       <div class="table-wrap" tabindex="0" role="region" aria-label="在庫一覧（横にスクロールできます）">
         <table id="stockTable">
           <thead>

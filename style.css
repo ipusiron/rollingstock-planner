@@ -1127,3 +1127,6 @@ small { font-size: .875rem; }
   body.print-shopping #alerts, body.print-shopping #shoppingCard, body.print-shopping #shoppingPrint { display: block !important; color: black; background: white; border: 0; }
 }
 .expiry-type { display: block; font-size: 0.875rem; white-space: normal; }
+.review-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.review-controls select { flex: 1 1 16rem; min-width: 0; max-width: 100%; }
+.review-reasons { display: block; font-size: 0.875rem; overflow-wrap: anywhere; }
