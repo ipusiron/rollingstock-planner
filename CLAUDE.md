@@ -45,7 +45,7 @@ Use a feature branch and pull request. Both push and pull_request Test runs must
 
 | Key | Type | Description |
 |---|---|---|
-| rsp_state_v2 | JSON object | Atomic envelope: meta {app, ver:3}, items, family, alertMonths; key name is not the format version |
+| rsp_state_v2 | JSON object | Atomic envelope: meta {app, ver:4}, items, family, alertMonths; key name is not the format version |
 | rsp_items | JSON array | Read-only compatibility source, preserved unchanged |
 | rsp_family | JSON object | Read-only compatibility source, preserved unchanged |
 | rsp_alert_months | string | Read-only compatibility source, preserved unchanged |
@@ -53,6 +53,7 @@ Use a feature branch and pull request. Both push and pull_request Test runs must
 | rsp_language | string | ja or en, independent optional preference |
 
 Items contain name, category, quantity, unit, expiry, kcal and createdAt.
+Optional expiryType is unspecified, best-before, use-by or expiration. Missing types remain missing and display as unspecified; never infer a type or food safety.
 Water may additionally contain explicit integer volumeMl, with unit=bottle and integer quantity. Never infer this field from names or total-volume records.
 Family contains adults, children, seniors, dogs, cats, days, waterPerPerson,
 adultKcal, childKcal, seniorKcal, dogWater and catWater.
@@ -78,7 +79,7 @@ adultKcal, childKcal, seniorKcal, dogWater and catWater.
 
 - Water: category water AND unit L/ℓ or mL (case insensitive); mL is divided by 1000. Never infer bottle or box volume.
 - Explicit bottled water uses quantity × volumeMl / 1000. Purchase counts round up; unknown or zero targets stay uncalculated.
-- StockActions returns validated immutable candidates. Replenish combines only identical nonempty dates; other dates create a row.
+- StockActions returns validated immutable candidates. Replenish combines only identical nonempty dates AND identical date types; otherwise it creates a row.
 - One-step undo survives language/theme changes, but not another successful save or reload. Failed saves preserve it.
 - Human calories: category food only, quantity multiplied by kcal per unit.
 - Ledger totals include dated and undated records. Planned totals exclude expired and undated records.
@@ -111,11 +112,13 @@ Dates do not establish food safety. Never recommend consuming expired food or me
 - Edit mode uses openModal('edit', itemIndex); save failures leave the dialog and inputs intact.
 - Import replaces the entire state only after full validation, confirmation and successful persistence.
 - Import limit: 10 MiB and 5000 rows. Reject any invalid row instead of dropping it.
-- Formats 1, 2 and 3 can be read; save/export format is 3, including volumeMl. Reject unsupported versions.
+- Formats 1, 2, 3 and 4 can be read; save/export format is 4, including volumeMl and expiryType. Reject unsupported versions and date types.
 - Theme default is light, applied before CSS by theme-init.js.
 - Help uses a native popover; Escape closes it before the item dialog.
 - Tabs support arrows/Home/End; modal focus is trapped and restored; background is inert.
 - Pagination is 50 rows; search resets currentPage.
+- Review filters combine with search before pagination, without changing totals, alerts or shopping output. Selection resets on reload but survives language changes. Date-dependent filters refresh with the day and alert threshold.
+- Zero rows only match all or zero, not other review filters. Missing calories apply only to human food; explicit zero calories are not missing.
 - Explicit temporary-session mode never pretends data is persisted.
 - Recovery JSON contains original raw values and is not a normal import file.
 - Multi-tab snapshots detect changed data but are not a cross-tab transaction lock.

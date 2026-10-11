@@ -49,6 +49,8 @@ test('README example numbers are verified by the core', () => {
     assert.match(text,/\b144(?:本| bottles)/);
     assert.match(text,/meta.ver: 4/);
     assert.match(text,/volumeMl/);
+    assert.match(text,/expiryType/);
+    for (const type of core.EXPIRY_TYPES) assert.ok(text.includes('`' + type + '`'), type);
   }
 });
 
