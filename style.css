@@ -1060,7 +1060,7 @@ button, .btn, .btn-small, .file-btn, .modal-close { min-height: 44px; }
 [data-theme="light"] .btn.primary:hover, .add-item-btn, .add-item-btn:hover,
 .expert-badge { background: var(--button-bg); color: var(--button-text); }
 button:hover { transform: none !important; }
-.help-icon { width: 40px; height: 40px; min-height: 40px; font-size: 1rem; border: 1px solid var(--line-strong); color: var(--text); background: var(--card); vertical-align: middle; margin: .25rem; }
+.help-icon { width: 44px; height: 44px; min-height: 44px; font-size: 1rem; border: 1px solid var(--line-strong); color: var(--text); background: var(--card); vertical-align: middle; margin: .25rem; }
 .help-icon:hover { color: var(--text); background: var(--bg); }
 .help-icon::before, .help-icon::after { display: none !important; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
