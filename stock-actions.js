@@ -18,14 +18,15 @@
     item.quantity = Number((item.quantity - value).toPrecision(15));
     return Core.validateState(data);
   }
-  function replenish(state, index, amount, expiry) {
+  function replenish(state, index, amount, expiry, expiryType = 'unspecified') {
     const { data, item, value } = prepare(state, index, amount);
     if (typeof expiry !== 'string' || (expiry && Core.dateNumber(expiry) === null)) throw new Error('date');
-    if (expiry && item.expiry === expiry) {
+    if (!Core.EXPIRY_TYPES.includes(expiryType)) throw new Error('expiryType');
+    if (expiry && item.expiry === expiry && (item.expiryType ?? 'unspecified') === expiryType) {
       item.quantity = Number((item.quantity + value).toPrecision(15));
     } else {
       // Unknown dates do not prove two purchases have the same expiry.
-      data.items.push({ ...item, quantity: value, expiry, createdAt: Date.now() });
+      data.items.push({ ...item, quantity: value, expiry, expiryType, createdAt: Date.now() });
     }
     return Core.validateState(data);
   }
