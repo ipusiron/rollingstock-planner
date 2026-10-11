@@ -11,8 +11,6 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <meta http-equiv="X-Frame-Options" content="DENY" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <!-- Chart.js CDN (version pinned for security) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <header class="app-header">
@@ -97,12 +95,14 @@
           <p id="kcalTotal">— kcal</p>
         </div>
         <div class="card">
-          <h3>備蓄品カテゴリ別の割合</h3>
+          <h3>カテゴリ別の登録件数（数量0を除く）</h3>
           <div class="chart-container small">
-            <canvas id="categoryChart"></canvas>
+            <div id="categoryChart"></div>
           </div>
         </div>
       </div>
+      <p id="stockLimits" class="note"></p>
+      <p>在庫の合計と、計画へ算入した量は異なります。水は「水」カテゴリのL・mLのみ、人用カロリーは「食料」カテゴリのみ集計します。期限切れと期限未入力は計画から除外します。</p>
     </section>
 
     <!-- Family Setup Tab -->
@@ -186,25 +186,25 @@
         </div>
       </form>
 
-      <h2>必要量計算</h2>
+      <h2>入力した条件による計画量</h2>
       <div class="cards three">
         <div class="card">
-          <h3>必要水量（人＋ペット）
-            <span class="help-icon" data-tooltip="家族構成と想定日数から計算した、必要な水の総量です。飲用だけでなく調理や衛生用途も含みます。">?</span>
+          <h3>水の計画量（人＋ペット）
+            <span class="help-icon" data-tooltip="人数と1日あたりの計画値、日数を掛けた量です。人用の初期値は飲料と調理用の3Lで、衛生などの生活用水は含みません。">?</span>
           </h3>
           <p id="needWater">— L</p>
-          <small>基準：成人4L/日・子ども2L/日・高齢者3L/日・犬1L/日・猫0.3L/日</small>
+          <small>人用の初期値：1人1日3L（飲料と調理用）。ペットの水量は個別設定。</small>
         </div>
         <div class="card">
-          <h3>必要カロリー（人）
-            <span class="help-icon" data-tooltip="家族構成と想定日数から計算した、必要なカロリーの総量です。通常より活動量が低いことを想定した標準的な値です。">?</span>
+          <h3>カロリーの計画量（人）
+            <span class="help-icon" data-tooltip="入力した計画値の合計です。個人の栄養の必要量やペットフードの必要量は判定しません。">?</span>
           </h3>
           <p id="needKcal">— kcal</p>
-          <small>基準：成人2000 / 子ども1400 / 高齢者1800 (kcal/日)</small>
+          <small>初期値は計算例です。各家庭の条件に合わせて調整してください。</small>
         </div>
         <div class="card">
           <h3>在庫充足率
-            <span class="help-icon" data-tooltip="現在の在庫が、必要量に対して何%満たしているかを表示します。100%以上で必要量を確保できています。">?</span>
+            <span class="help-icon" data-tooltip="計画に算入した在庫を目標量で割った割合です。期限切れ、期限未入力、容量不明や栄養未入力の値は算入しません。食品の安全性は判定しません。">?</span>
           </h3>
           <p id="coverage">—</p>
           <small>水・カロリーそれぞれの達成率を表示</small>
@@ -218,13 +218,13 @@
       <div class="cards two">
         <div class="card">
           <h3>期限切れ / 期限間近
-            <span class="help-icon" data-tooltip="期限が切れている、または警告閾値内に期限が来るアイテムを表示します。早めに消費または買い替えを検討してください。">?</span>
+            <span class="help-icon" data-tooltip="登録した期限を基に確認対象を表示します。消費期限を過ぎた食品は食べないでください。医薬品等は製品の表示を確認してください。">?</span>
           </h3>
           <ul id="expiryList" class="bullet"></ul>
         </div>
         <div class="card">
-          <h3>ローリングストック推奨（今週消費）
-            <span class="help-icon" data-tooltip="14日以内に期限が来るアイテムを表示します。日常の食事で消費し、新しいものを補充することで、常に新鮮な備蓄を維持できます。">?</span>
+          <h3>今日から14日後までの食品と水
+            <span class="help-icon" data-tooltip="数量がある食料、水、ペットフードだけを表示します。期限と保存状態、製品の表示を確認して使用してください。">?</span>
           </h3>
           <ul id="rollingList" class="bullet"></ul>
         </div>
@@ -233,18 +233,18 @@
       <div class="cards two">
         <div class="card">
           <h3>水の充足率
-            <span class="help-icon" data-tooltip="左から「必要量（L）」「現在の在庫（L）」「達成率（%）」を表示します。達成率が100%以上なら目標を達成しています。">?</span>
+            <span class="help-icon" data-tooltip="計画量と算入した在庫をLで比較します。達成率は別に表示し、棒の長さだけ100%を上限にします。">?</span>
           </h3>
           <div class="chart-container">
-            <canvas id="waterChart"></canvas>
+            <div id="waterChart"></div>
           </div>
         </div>
         <div class="card">
           <h3>カロリーの充足率
-            <span class="help-icon" data-tooltip="左から「必要量（kcal）」「現在の在庫（kcal）」「達成率（%）」を表示します。達成率が100%以上なら目標を達成しています。">?</span>
+            <span class="help-icon" data-tooltip="人用食料の計画量と算入した在庫をkcalで比較します。達成率は別に表示します。栄養バランスは評価しません。">?</span>
           </h3>
           <div class="chart-container">
-            <canvas id="kcalChart"></canvas>
+            <div id="kcalChart"></div>
           </div>
         </div>
       </div>
@@ -252,12 +252,13 @@
       <h2>提案</h2>
       <div class="card expert-advice">
         <div class="expert-header">
-          <h3>🎓 防災専門家による総合分析</h3>
-          <span class="expert-badge">AI防災アドバイザー</span>
+          <h3>備蓄チェック</h3>
+          <span class="expert-badge">登録内容に基づく確認</span>
         </div>
         <div id="expertAnalysis" class="expert-content">
           <p>—</p>
         </div>
+        <p>固定の計算条件で登録内容を整理します。AIや専門家の診断ではありません。食品の安全性、栄養の充足、避難の可否は判断しません。</p>
       </div>
     </section>
 

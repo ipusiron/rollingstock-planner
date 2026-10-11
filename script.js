@@ -24,7 +24,6 @@ let items = loadedStock.data.items;
 let family = loadedStock.data.family;
 let alertMonths = loadedStock.data.alertMonths;
 let importing = false;
-let categoryChart, waterChart, kcalChart;
 
 // ページネーション設定
 const ITEMS_PER_PAGE = 50;  // 1ページあたりの表示件数
@@ -62,56 +61,9 @@ function downloadJSON(data, prefix) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/**
- * ISO 8601形式の日付文字列をDateオブジェクトに変換
- * @param {string} str - 日付文字列（YYYY-MM-DD）
- * @returns {Date|null} Dateオブジェクトまたはnull
- */
-function parseDate(str){
-  if(!str) return null;
-  const d = new Date(str + 'T00:00:00');  // 時刻を00:00:00に固定
-  return isNaN(d) ? null : d;
-}
-
-/**
- * DateオブジェクトをYYYY-MM-DD形式の文字列に変換
- * @param {Date} d - Dateオブジェクト
- * @returns {string} フォーマットされた日付文字列
- */
-function formatDate(d){
-  if(!d) return '—';
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`;
-}
-
-/**
- * 2つの日付間の月数差を計算
- * @param {Date} a - 開始日
- * @param {Date} b - 終了日
- * @returns {number} 月数差（b - a）
- */
-function monthsDiff(a,b){
-  return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
-}
-
-/**
- * 2つの日付間の日数差を計算
- * @param {Date} a - 開始日
- * @param {Date} b - 終了日
- * @returns {number} 日数差（b - a）
- */
-function daysDiff(a,b){
-  return Math.floor((b - a)/(1000*60*60*24));
-}
-
-/**
- * 配列の合計値を計算
- * @param {Array<number>} arr - 数値配列
- * @returns {number} 合計値
- */
-function sum(arr){ return arr.reduce((x,y)=>x+y,0); }
+// Calendar helpers do not divide elapsed local time across a DST transition.
+function parseDate(value) { return StockCore.dateNumber(value); }
+function formatDate(date) { return StockCore.today(date); }
 
 /* ===============================
    DOM Helpers
@@ -342,76 +294,12 @@ $('#resetFamily').addEventListener('click', () => {
 
 /* ===============================
    Calculations
-
-   備蓄量・必要量・充足率の計算関数
 ==================================*/
-
-/**
- * 現在の備蓄量の合計を計算
- * - 水：カテゴリが'water'または単位が'L'/'ℓ'のアイテムの合計
- * - カロリー：kcal値を持つアイテムの合計（数量×単位カロリー）
- * @returns {Object} { waterL: 水の合計(L), kcal: カロリーの合計 }
- */
-function calcTotals(){
-  // 水の合計（リットル）
-  let waterL = 0;
-  for(const it of items){
-    const unit = (it.unit||'').toLowerCase();
-    if(it.category==='water' || unit==='l' || unit==='ℓ'){
-      // 単位がLの場合、数量はすでにリットル単位
-      // 例：2Lペットボトル6本 → 数量=12、単位=L
-      waterL += Number(it.quantity)||0;
-    }
-  }
-
-  // カロリーの合計（kcal）
-  const kcal = sum(items.filter(i=>i.kcal!=null).map(i=> (Number(i.kcal)||0) * (Number(i.quantity)||0) ));
-
-  return { waterL, kcal };
-}
-
-/**
- * 家族構成に基づく必要量を計算
- *
- * 水の必要量（1日あたり）：
- * - 成人: 4L/日
- * - 子ども: 2L/日
- * - 高齢者: 3L/日
- * - 犬: 1L/日
- * - 猫: 0.3L/日
- *
- * カロリーの必要量（1日あたり）：
- * - 成人: 2000kcal/日
- * - 子ども: 1400kcal/日
- * - 高齢者: 1800kcal/日
- *
- * @returns {Object} { needWater: 必要水量(L), needKcal: 必要カロリー(kcal) }
- */
-function calcNeeds(){
-  const d = family.days;
-  const waterPerDay =
-    family.adults*4 + family.children*2 + family.seniors*3
-    + family.dogs*1 + family.cats*0.3;
-  const kcalPerDay =
-    family.adults*2000 + family.children*1400 + family.seniors*1800;
-  return { needWater: waterPerDay * d, needKcal: kcalPerDay * d };
-}
-
-/**
- * 備蓄の充足率を計算
- * @returns {Object} {
- *   waterCov: 水の充足率(%)、
- *   kcalCov: カロリーの充足率(%)、
- *   totals: 現在の備蓄量、
- *   needs: 必要量
- * }
- */
-function coverage(){
-  const t = calcTotals();
-  const n = calcNeeds();
-  const waterCov = n.needWater ? Math.min(100, Math.round(t.waterL / n.needWater * 100)) : 0;
-  const kcalCov = n.needKcal ? Math.min(100, Math.round(t.kcal / n.needKcal * 100)) : 0;
-  return { waterCov, kcalCov, totals: t, needs: n };
+function calcTotals() { return StockCore.totals(items); }
+function calcNeeds() { return StockCore.needs(family); }
+function coverage() { return StockCore.coverage(items, family); }
+function ratioText(metric) {
+  return metric.ratio === null ? '計算対象外／未設定' : fmtNum(Math.floor(metric.ratio * 100) / 100) + '%';
 }
 
 /* ===============================
@@ -424,21 +312,19 @@ function coverage(){
 function renderTable(){
   const q = $('#search').value.trim().toLowerCase();
   const sort = $('#sort').value;
-  const now = new Date();
-
-  // 日付のみの比較用（時刻を0:00:00に統一）
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  // 警告閾値の日付（今日 + alertMonths ヶ月）
-  const warnEdge = new Date(now);
-  warnEdge.setMonth(now.getMonth() + alertMonths);
+  const day = StockCore.today();
+  const totals = calcTotals();
+  $('#waterTotal').textContent = fmtNum(totals.waterL) + ' L';
+  $('#kcalTotal').textContent = fmtNum(totals.kcal) + ' kcal';
+  $('#summaryRow').textContent = '登録件数：' + items.length + ' ｜ 水：' + fmtNum(totals.waterL) + ' L ｜ 人用食料：' + fmtNum(totals.kcal) + ' kcal';
+  $('#stockLimits').textContent = '計画に算入した在庫：水 ' + fmtNum(totals.plannedWaterL) + ' L、人用食料 ' + fmtNum(totals.plannedKcal) + ' kcal。'
+    + '確認が必要：水の単位不明 ' + totals.unknownWater + '件、食料のカロリー未入力 ' + totals.unknownKcal
+    + '件、期限未入力 ' + totals.undated + '件、期限切れ ' + totals.expired + '件。数量0は集計とアラートの対象外です。';
 
   let filtered = items.map((it, idx)=> ({...it, idx}));
   if(q){
     filtered = filtered.filter(it=>{
-      return [it.name, it.category, it.unit].filter(Boolean).some(s=>String(s).toLowerCase().includes(q));
+      return [it.name, it.category, labelForCategory(it.category), it.unit].filter(Boolean).some(s=>String(s).toLowerCase().includes(q));
     });
   }
 
@@ -446,9 +332,9 @@ function renderTable(){
     const da = a.expiry ? parseDate(a.expiry) : null;
     const db = b.expiry ? parseDate(b.expiry) : null;
     if(sort==='expiryAsc'){
-      if(!da && !db) return 0; if(!da) return 1; if(!db) return -1; return da-db;
+      if(da === null && db === null) return 0; if(da === null) return 1; if(db === null) return -1; return da-db;
     }else if(sort==='expiryDesc'){
-      if(!da && !db) return 0; if(!da) return 1; if(!db) return -1; return db-da;
+      if(da === null && db === null) return 0; if(da === null) return 1; if(db === null) return -1; return db-da;
     }else if(sort==='nameAsc'){
       return a.name.localeCompare(b.name);
     }else if(sort==='nameDesc'){
@@ -462,15 +348,15 @@ function renderTable(){
   const tbody = $('#stockTable tbody');
   tbody.innerHTML = '';
 
-  // Empty state
-  if(items.length === 0){
-    tbody.innerHTML = `
-      <tr><td colspan="8" class="empty-state">
-        <h3>まだアイテムが登録されていません</h3>
-        <p>上のフォームから備蓄品を追加してください</p>
-      </td></tr>
-    `;
-    $('#summaryRow').textContent = '登録件数：0';
+  // Show both an empty inventory and an empty search explicitly.
+  if (filtered.length === 0) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 8;
+    cell.className = 'empty-state';
+    cell.textContent = items.length === 0 ? 'まだアイテムが登録されていません。「アイテム追加」から登録してください。' : '検索条件に一致するアイテムはありません。';
+    row.appendChild(cell);
+    tbody.appendChild(row);
     drawCategoryChart();
     updatePagination(0);
     return;
@@ -487,17 +373,14 @@ function renderTable(){
   for(const it of paginatedItems){
     const tr = document.createElement('tr');
 
-    // status badge (4 states: expired, today, warning, ok)
-    let badge = '<span class="badge">—</span>';
-    if(it.expiry){
-      const d = parseDate(it.expiry);
-      if(d){
-        if(d < today) badge = '<span class="badge red">期限切れ</span>';
-        else if(d < tomorrow) badge = '<span class="badge orange">本日期限</span>';
-        else if(d <= warnEdge) badge = '<span class="badge yellow">要消費</span>';
-        else badge = '<span class="badge green">OK</span>';
-      }
-    }
+    const status = StockCore.expiryStatus(it, day, alertMonths);
+    const statuses = {
+      expired: ['red', '期限切れ'], today: ['orange', '本日期限'],
+      near: ['yellow', '期限間近'], later: ['green', '期限まで余裕'],
+      unknown: ['', '期限未入力'], invalid: ['red', '日付要確認']
+    };
+    const [color, label] = statuses[status];
+    const badge = '<span class="badge ' + color + '">' + label + '</span>';
 
     const kcalText = it.kcal!=null ? `${(it.kcal*it.quantity).toLocaleString()} kcal` : '—';
 
@@ -544,11 +427,7 @@ function renderTable(){
     });
   });
 
-  // summary
-  const { waterL, kcal } = calcTotals();
-  $('#waterTotal').textContent = `${fmtNum(waterL)} L`;
-  $('#kcalTotal').textContent = `${fmtNum(kcal)} kcal`;
-  $('#summaryRow').textContent = `登録件数：${items.length}　｜　水：${fmtNum(waterL)} L　｜　食料エネルギー：${fmtNum(kcal)} kcal`;
+
 
   updatePagination(totalPages);
   checkTableScroll();
@@ -623,353 +502,94 @@ function fmtNum(n){
 }
 
 /* ===============================
-   Alerts & Suggestions
+   Alerts and stock checks
 ==================================*/
-function renderAlerts(){
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Midnight of today
-  const warnEdge = new Date(now);
-  warnEdge.setMonth(now.getMonth()+alertMonths);
-
-  const expired = [];
-  const near = [];
-  const rollingThisWeek = []; // items expiring within 7 days after warnEdge? No: items with no expiry but category food/water -> if plenty, suggest consume. For simplicity, choose near list also.
-  for(const it of items){
-    if(!it.expiry) continue;
-    const d = parseDate(it.expiry);
-    if(!d) continue;
-    if(d < today) expired.push(it);
-    else if(d <= warnEdge) near.push(it);
-    const diff = daysDiff(now, d);
-    if(diff >= 0 && diff <= 14) rollingThisWeek.push(it);
-  }
-
+function renderAlerts() {
+  const lists = StockCore.alerts(items, StockCore.today(), alertMonths);
   const expiryUl = $('#expiryList');
-  expiryUl.innerHTML = '';
-  [...expired, ...near].forEach(it=>{
+  expiryUl.replaceChildren();
+  for (const it of [...lists.expired, ...lists.near]) {
     const li = document.createElement('li');
-    const tag = (parseDate(it.expiry) < today) ? '期限切れ' : '期限近';
-    li.innerHTML = `<strong>[${tag}]</strong> ${escapeHtml(it.name)} / ${fmtNum(it.quantity)} ${escapeHtml(it.unit||'')} / 期限: ${escapeHtml(it.expiry)}`;
+    const status = StockCore.expiryStatus(it, StockCore.today(), alertMonths);
+    const tag = status === 'expired' ? '期限切れ' : status === 'today' ? '本日期限' : '期限間近';
+    li.textContent = '[' + tag + '] ' + it.name + ' / ' + fmtNum(it.quantity) + ' ' + it.unit + ' / ' + it.expiry;
     expiryUl.appendChild(li);
-  });
-  if(expiryUl.children.length===0){
-    expiryUl.innerHTML = '<li>該当なし</li>';
   }
-
+  if (!expiryUl.children.length) expiryUl.textContent = '該当なし';
   const rollingUl = $('#rollingList');
-  rollingUl.innerHTML = '';
-  if(rollingThisWeek.length){
-    rollingThisWeek.sort((a,b)=>parseDate(a.expiry)-parseDate(b.expiry));
-    rollingThisWeek.forEach(it=>{
-      const li = document.createElement('li');
-      li.textContent = `${it.name}（${it.expiry} までに消費推奨）`;
-      rollingUl.appendChild(li);
-    });
-  }else{
-    rollingUl.innerHTML = '<li>今週の推奨消費対象はありません</li>';
+  rollingUl.replaceChildren();
+  for (const it of lists.rolling) {
+    const li = document.createElement('li');
+    li.textContent = it.name + '（期限 ' + it.expiry + '、表示と保存状態を確認）';
+    rollingUl.appendChild(li);
   }
-
-  // Expert analysis
-  generateExpertAnalysis(expired, near, rollingThisWeek);
+  if (!rollingUl.children.length) rollingUl.textContent = '今日から14日後までの対象はありません。';
+  renderStockCheck(lists);
   drawCoverageCharts();
 }
 
-/* ===============================
-   Expert Analysis
-
-   AI防災アドバイザー機能
-   備蓄状況を5つの観点から総合分析し、具体的なアクションを提案
-==================================*/
-
-/**
- * 専門家による備蓄分析を生成
- *
- * 分析項目：
- * 1. 総合評価（優秀/良好/要改善/緊急対応必要）
- * 2. 水・食料の充足状況（不足量の具体的な提示）
- * 3. 期限管理状況（期限切れ・期限間近の件数）
- * 4. カテゴリバランス（多様性のチェック）
- * 5. 具体的なアクション（家族構成に応じた個別提案）
- *
- * @param {Array} expired - 期限切れアイテムリスト
- * @param {Array} near - 期限間近アイテムリスト
- * @param {Array} rolling - ローリングストック推奨アイテムリスト
- */
-function generateExpertAnalysis(expired, near, rolling){
+function renderStockCheck(lists) {
   const cov = coverage();
-  const totalItems = items.length;
-
-  // カテゴリ別のアイテム数を集計
-  const categories = {};
-  for(const it of items){
-    categories[it.category] = (categories[it.category] || 0) + 1;
+  const container = $('#expertAnalysis');
+  container.replaceChildren();
+  const lines = [];
+  for (const [label, metric, unit] of [['水', cov.water, 'L'], ['人用食料', cov.food, 'kcal']]) {
+    lines.push(label + '：' + (metric.met === null
+      ? '目標が0または未設定のため達成率を計算しません。'
+      : metric.met
+        ? '入力した数量の目標以上です。食品の安全性や栄養の充足を保証するものではありません。'
+        : '計画値に対し ' + fmtNum(Math.ceil(metric.shortage * 100) / 100) + ' ' + unit + '不足しています。'));
   }
-
-  // 分析セクションを構築
-  const sections = [];
-
-  // 1. 総合評価（充足率と期限切れ数から総合判定）
-  let overallGrade = '';
-  let overallMsg = '';
-  let gradeClass = '';
-  const avgCoverage = (cov.waterCov + cov.kcalCov) / 2;
-
-  if(avgCoverage >= 100 && expired.length === 0){
-    overallGrade = '優秀';
-    overallMsg = '備蓄体制は非常に良好です。現在の管理体制を継続してください。';
-    gradeClass = 'grade-excellent';
-  }else if(avgCoverage >= 80 && expired.length <= 2){
-    overallGrade = '良好';
-    overallMsg = '概ね良好な備蓄状態です。一部改善の余地があります。';
-    gradeClass = 'grade-good';
-  }else if(avgCoverage >= 50){
-    overallGrade = '要改善';
-    overallMsg = '備蓄が不足しています。早急に補充を検討してください。';
-    gradeClass = 'grade-warning';
-  }else{
-    overallGrade = '緊急対応必要';
-    overallMsg = '備蓄が著しく不足しています。至急、必要物資を確保してください。';
-    gradeClass = 'grade-critical';
-  }
-
-  sections.push(`<div class="analysis-section overall-grade">
-    <h4>📊 総合評価</h4>
-    <div class="grade-badge ${gradeClass}">${overallGrade}</div>
-    <p class="grade-message">${overallMsg}</p>
-  </div>`);
-
-  // 2. Coverage analysis
-  const coverageAnalysis = [];
-  if(cov.waterCov < 100){
-    const shortage = Math.ceil(cov.needs.needWater - cov.totals.waterL);
-    const urgency = cov.waterCov < 50 ? 'critical-shortage' : 'shortage';
-    coverageAnalysis.push(`<div class="coverage-item ${urgency}">
-      <strong>💧 水：</strong>目標の<span class="coverage-percent">${cov.waterCov}%</span>
-      <span class="shortage-amount">不足 ${shortage}L</span>
-      <div class="action-hint">→ 2Lペットボトルで約${Math.ceil(shortage/2)}本の追加購入を推奨</div>
-    </div>`);
-  }else{
-    coverageAnalysis.push(`<div class="coverage-item ok">
-      <strong>💧 水：</strong>目標達成（<span class="coverage-percent ok">${cov.waterCov}%</span>）適切に管理されています。
-    </div>`);
-  }
-
-  if(cov.kcalCov < 100){
-    const shortage = Math.ceil(cov.needs.needKcal - cov.totals.kcal);
-    const cansNeeded = Math.ceil(shortage / 300); // 1缶約300kcal想定
-    const urgency = cov.kcalCov < 50 ? 'critical-shortage' : 'shortage';
-    coverageAnalysis.push(`<div class="coverage-item ${urgency}">
-      <strong>🍱 食料：</strong>目標の<span class="coverage-percent">${cov.kcalCov}%</span>
-      <span class="shortage-amount">不足 ${fmtNum(shortage)} kcal</span>
-      <div class="action-hint">→ 缶詰・レトルト約${cansNeeded}個分の補充が必要</div>
-    </div>`);
-  }else{
-    coverageAnalysis.push(`<div class="coverage-item ok">
-      <strong>🍱 食料：</strong>目標達成（<span class="coverage-percent ok">${cov.kcalCov}%</span>）適切に管理されています。
-    </div>`);
-  }
-
-  sections.push(`<div class="analysis-section">
-    <h4>💧 水・食料の充足状況</h4>
-    <div class="coverage-grid">${coverageAnalysis.join('')}</div>
-  </div>`);
-
-  // 3. Expiry management
-  const expiryAnalysis = [];
-  if(expired.length > 0){
-    expiryAnalysis.push(`<strong class="warning">⚠️ 期限切れ：${expired.length}件</strong> - 至急確認し、処分または消費を検討してください。`);
-  }
-  if(near.length > 0){
-    expiryAnalysis.push(`<strong class="caution">⏰ 期限間近：${near.length}件</strong> - ${alertMonths}ヶ月以内に期限が到来します。計画的に消費しましょう。`);
-  }
-  if(rolling.length > 0){
-    expiryAnalysis.push(`<strong>🔄 ローリングストック推奨：${rolling.length}件</strong> - 日常生活で消費し、新しいものと入れ替えてください。`);
-  }
-  if(expired.length === 0 && near.length === 0){
-    expiryAnalysis.push(`<strong class="good">✅ 期限管理：良好</strong> - 期限切れ・期限間近のアイテムはありません。`);
-  }
-
-  sections.push(`<div class="analysis-section">
-    <h4>📅 期限管理状況</h4>
-    <p>${expiryAnalysis.join('<br>')}</p>
-  </div>`);
-
-  // 4. Category balance
-  const categoryAnalysis = [];
-  const categoryCount = Object.keys(categories).length;
-
-  if(categoryCount >= 5){
-    categoryAnalysis.push('✅ カテゴリバランスは良好です（水・食料・医薬品・生活用品など）。');
-  }else if(categoryCount >= 3){
-    categoryAnalysis.push('⚠️ カテゴリがやや偏っています。医薬品・生活用品・ツール類も検討してください。');
-  }else{
-    categoryAnalysis.push('🔴 カテゴリが偏っています。多様な備蓄を心がけましょう。');
-  }
-
-  if(!categories['medicine'] && !categories['医薬品']){
-    categoryAnalysis.push('💊 医薬品が未登録です。常備薬・救急セットを備蓄してください。');
-  }
-  if(!categories['daily'] && !categories['生活用品']){
-    categoryAnalysis.push('🧻 生活用品（トイレットペーパー、石けん等）を追加推奨。');
-  }
-
-  sections.push(`<div class="analysis-section">
-    <h4>📦 カテゴリバランス（${categoryCount}種類登録）</h4>
-    <p>${categoryAnalysis.join('<br>')}</p>
-  </div>`);
-
-  // 5. Actionable recommendations
-  const recommendations = [];
-
-  if(totalItems === 0){
-    recommendations.push('📝 まずは基本的な備蓄から始めましょう：水、保存食、医薬品、懐中電灯。');
-  }else{
-    if(cov.waterCov < 70) recommendations.push('💧 最優先：水の備蓄を増やしてください。');
-    if(cov.kcalCov < 70) recommendations.push('🍱 次に：長期保存可能な食料（缶詰・レトルト）を追加してください。');
-    if(expired.length > 3) recommendations.push('⚠️ 期限切れアイテムが多数あります。定期的な見直しが必要です。');
-    if(rolling.length > 5) recommendations.push('🔄 ローリングストック対象が多数あります。週次で計画的に消費しましょう。');
-
-    // Family-based recommendations
-    const totalPeople = family.adults + family.children + family.seniors;
-    const totalPets = family.dogs + family.cats;
-    if(totalPets > 0 && (!categories['pet-food'] && !categories['ペットフード'])){
-      recommendations.push('🐾 ペット用の備蓄（餌・水）を忘れずに追加してください。');
-    }
-    if(family.children > 0){
-      recommendations.push('👶 乳幼児がいる場合、粉ミルク・離乳食・おむつも必須です。');
-    }
-    if(family.seniors > 0){
-      recommendations.push('👴 高齢者向けに、常備薬・介護用品・やわらかい食品を考慮してください。');
-    }
-  }
-
-  if(recommendations.length === 0){
-    recommendations.push('✅ 現在の備蓄は充実しています。定期的なメンテナンスを継続してください。');
-  }
-
-  sections.push(`<div class="analysis-section">
-    <h4>💡 具体的なアクション</h4>
-    <ul class="recommendation-list">
-      ${recommendations.map(r => `<li>${r}</li>`).join('')}
-    </ul>
-  </div>`);
-
-  // Render
-  $('#expertAnalysis').innerHTML = sections.join('');
+  if (cov.needs.petUnknown) lines.push('ペットの水量が未設定です。家族構成タブで、普段の使用量などに基づく計画値を入力してください。');
+  if (lists.expired.length) lines.push('期限切れは' + lists.expired.length + '件です。消費期限を過ぎた食品は食べないでください。医薬品等は製品の表示を確認してください。');
+  if (cov.totals.undated) lines.push('期限未入力は' + cov.totals.undated + '件です。期限表示のない品も含め、計画への算入から外しています。安全性を判定した結果ではありません。');
+  if (cov.totals.unknownWater) lines.push('水の容量不明は' + cov.totals.unknownWater + '件です。本数や箱数をLへ推測換算しません。');
+  if (cov.totals.unknownKcal) lines.push('人用食料のカロリー未入力は' + cov.totals.unknownKcal + '件です。未入力は0kcalの食品という意味ではありません。');
+  const categories = new Set(items.filter(it => it.quantity > 0).map(it => it.category));
+  if (family.dogs + family.cats > 0) lines.push('ペットフードの必要量は計算していません。普段の食事と個体ごとの必要量を別に確認してください。');
+  lines.push('数量のある登録カテゴリ：' + categories.size + '種類。品目数だけで備蓄のバランスや安全性は評価しません。');
+  for (const line of lines) { const p = document.createElement('p'); p.textContent = line; container.appendChild(p); }
 }
 
 /* ===============================
-   Charts
+   Dependency-free data displays
 ==================================*/
-function getChartTextColor(){
-  return currentTheme === 'light' ? '#1a1a1a' : '#cbd5e1';
-}
-
-function drawCategoryChart(){
-  if (typeof Chart === 'undefined') return;
-  const ctx = $('#categoryChart');
-  if(!ctx) return;
-
-  const counts = {};
-  for(const it of items){
-    counts[it.category] = (counts[it.category]||0) + (Number(it.quantity)||0);
+function drawCategoryChart() {
+  const container = $('#categoryChart');
+  container.replaceChildren();
+  for (const category of StockCore.CATEGORIES) {
+    const count = items.filter(it => it.category === category && it.quantity > 0).length;
+    const p = document.createElement('p');
+    p.textContent = labelForCategory(category) + '：' + count + '件';
+    container.appendChild(p);
   }
-  const labels = Object.keys(counts).map(labelForCategory);
-  const data = Object.values(counts);
-
-  if(categoryChart){
-    categoryChart.destroy();
-    categoryChart = null;
-  }
-
-  categoryChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets:[{ data }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 1,
-      plugins:{
-        legend:{
-          labels:{
-            color: getChartTextColor(),
-            boxWidth: 20,
-            boxHeight: 20,
-            padding: 15,
-            font: {
-              size: 13
-            }
-          },
-          position: 'bottom',
-          align: 'start'
-        }
-      }
-    }
-  });
 }
-
-function drawCoverageCharts(){
-  if (typeof Chart === 'undefined') return;
+function drawCoverageCharts() {
   const cov = coverage();
-  const wctx = $('#waterChart');
-  const kctx = $('#kcalChart');
-
-  if(!wctx || !kctx) return;
-
-  if(waterChart){
-    waterChart.destroy();
-    waterChart = null;
-  }
-  if(kcalChart){
-    kcalChart.destroy();
-    kcalChart = null;
-  }
-
-  const chartColor = getChartTextColor();
-
-  waterChart = new Chart(wctx, {
-    type:'bar',
-    data:{
-      labels:['必要量','在庫','達成率(%)'],
-      datasets:[{ data:[cov.needs.needWater, cov.totals.waterL, cov.waterCov] }]
-    },
-    options:{
-      responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 1.5,
-      scales:{
-        x:{ ticks:{ color: chartColor } },
-        y:{ ticks:{ color: chartColor }, beginAtZero: true }
-      },
-      plugins:{ legend:{ display:false } }
+  const entries = [
+    ['#waterChart', cov.water, cov.totals.plannedWaterL, cov.needs.needWater, 'L'],
+    ['#kcalChart', cov.food, cov.totals.plannedKcal, cov.needs.needKcal, 'kcal']
+  ];
+  for (const [id, metric, stock, target, unit] of entries) {
+    const container = $(id);
+    container.replaceChildren();
+    const summary = document.createElement('p');
+    summary.textContent = '計画値：' + (target === null ? '未設定' : fmtNum(target) + ' ' + unit)
+      + ' ｜ 算入した在庫：' + fmtNum(stock) + ' ' + unit;
+    const ratio = document.createElement('p');
+    ratio.textContent = '達成率：' + ratioText(metric);
+    container.append(summary, ratio);
+    if (metric.ratio !== null) {
+      const progress = document.createElement('progress');
+      progress.max = 100;
+      progress.value = Math.min(100, metric.ratio);
+      progress.setAttribute('aria-label', '計画値に対する達成率（棒は100%まで）');
+      container.appendChild(progress);
     }
-  });
-
-  kcalChart = new Chart(kctx, {
-    type:'bar',
-    data:{
-      labels:['必要量','在庫','達成率(%)'],
-      datasets:[{ data:[cov.needs.needKcal, cov.totals.kcal, cov.kcalCov] }]
-    },
-    options:{
-      responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 1.5,
-      scales:{
-        x:{ ticks:{ color: chartColor } },
-        y:{ ticks:{ color: chartColor }, beginAtZero: true }
-      },
-      plugins:{ legend:{ display:false } }
-    }
-  });
-
-  // Family panel KPIs
-  $('#needWater').textContent = `${fmtNum(cov.needs.needWater)} L`;
-  $('#needKcal').textContent = `${fmtNum(cov.needs.needKcal)} kcal`;
-  $('#coverage').textContent = `水 ${cov.waterCov}% ｜ カロリー ${cov.kcalCov}%`;
+  }
+  $('#needWater').textContent = cov.needs.needWater === null ? 'ペットの水量が未設定' : fmtNum(cov.needs.needWater) + ' L';
+  $('#needKcal').textContent = fmtNum(cov.needs.needKcal) + ' kcal';
+  $('#coverage').textContent = '水 ' + ratioText(cov.water) + ' ｜ 人用食料 ' + ratioText(cov.food);
 }
 
 /* ===============================
