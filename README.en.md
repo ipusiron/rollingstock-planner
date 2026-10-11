@@ -32,7 +32,7 @@ Use it directly in your browser. The button at the top right switches between Ja
 
 >![Inventory showing water volume and dates](assets/en/screenshot2.png)
 >
->*Inventory. Register water as total volume, or as a bottle count and capacity per bottle.*
+>*Inventory filtered for review, showing date types and the reasons each record needs attention.*
 
 >![Stock check in dark mode](assets/en/screenshot3.png)
 >
@@ -53,6 +53,8 @@ Use it directly in your browser. The button at the top right switches between Ja
 - Bottled water: enter bottle count and capacity to display the total in L
 - Shopping memo: water shortage in L, estimated bottles to buy, human-food shortage in kcal and excluded records; copy and print
 - Bilingual interface: switch without losing unfinished input; user-entered names and units are not translated
+- Date types: record unspecified, best-before, use-by or expiration dates
+- Review filters: narrow records by dates, missing inputs or zero quantity; combine with search and display matching counts and reasons
 
 ---
 
@@ -62,7 +64,7 @@ Use it directly in your browser. The button at the top right switches between Ja
 
 Review foods with approaching dates instead of buying and forgetting them. Update records with Use 1, Use a quantity and Replenish. The tool does not detect actual consumption, place orders or deliver notifications.
 
-Use 1 subtracts one of the row's units: 1 L for a quantity of 12 with unit L, or one bottle for a six-bottle record with capacity. Using more than the recorded quantity is rejected; zero-quantity rows remain. When replenishing, enter the date on the newly purchased supplies. Quantities are combined only if both dates are nonempty and match. A different or missing date creates a separate row without changing the original.
+Use 1 subtracts one of the row's units: 1 L for a quantity of 12 with unit L, or one bottle for a six-bottle record with capacity. Using more than the recorded quantity is rejected; zero-quantity rows remain. When replenishing, check the date and date type on the newly purchased supplies. Quantities are combined only when both the nonempty date and type match. A different date or type, or a missing date, creates a separate row without changing the original.
 
 You can undo the most recent use or replenishment once. Saving another change or reloading clears undo. If saving fails, confirmed quantities are unchanged, and input and undo information are retained. These actions update records; they do not decide whether food or medicine should be used.
 
@@ -218,6 +220,31 @@ Dates are compared as local calendar dates on the device. Adding months clamps t
 
 Past dates can be recorded, but expired and undated inventory is excluded from the plan. Zero-quantity rows remain but are excluded from totals, alerts and category row counts. When the date changes while the page is open, results refresh approximately once a minute or when you return to the page.
 
+Select a date type separately after checking the product label. Records without a type display as Unspecified; the tool does not infer types from names or categories.
+
+| Date type | JSON value | What to record |
+|---|---|---|
+| Unspecified | `unspecified` | Type unknown or not checked |
+| Best-before date | `best-before` | The quality-related date printed on food |
+| Use-by date | `use-by` | The use-by date printed on food |
+| Expiration date | `expiration` | The expiration date printed on medicines or other products |
+
+Passing a best-before date does not by itself mean food is inedible, but do not eat food past its use-by date. Both dates assume unopened packaging and storage as directed. This tool cannot check opening or storage conditions, so it excludes expired and undated records from the plan regardless of type. Follow the labels on products with expiration dates too. [Consumer Affairs Agency: food date labeling (Japanese)](https://www.caa.go.jp/policies/policy/food_labeling/food_sanitation/expiration_date/)
+
+The Inventory tab's Review records selector offers these filters:
+
+- Expired
+- Due today or soon (using the warning threshold in Settings)
+- No date
+- Date type unspecified
+- Water volume unknown (water records that cannot be converted from L, mL or capacity-defined bottle counts)
+- Food calories missing (human food only; distinct from an entered value of 0 kcal)
+- Zero quantity
+
+All review items includes positive-quantity rows matching at least one condition other than zero quantity. An unspecified type and a missing date are separate conditions; an unspecified type alone does not exclude a record from the plan. Search and the filter must both match. The matching count is calculated before pagination, and reasons appear in the table's Status column.
+
+Filtering changes only the view. Totals, alerts and the shopping memo use the entire inventory. Language changes preserve the filter, but reloading clears it. Clear search and filter resets the search text and review filter while retaining the sort order.
+
 ## 💾 Storage and JSON backups
 
 - Inventory, household and warning threshold are saved together. Failed saves do not replace confirmed in-memory data
@@ -231,7 +258,7 @@ Import replaces data; it does not append. Export JSON first. Rescue raw data pro
 
 LocalStorage capacity varies by browser. A file within the import limit may still be too large to save. HTTPS, local HTTP and directly opened files use different storage locations; storage behavior for local files also depends on the browser.
 
-The storage key is `rsp_state_v2`; its internal format and regular JSON output use `meta.ver: 3`. Capacity-defined water retains `unit: "bottle"` and `volumeMl`. Formats 1, 2 and 3 can be read; unsupported versions are rejected. Compatibility keys such as `rsp_items` remain read-only. Language (`rsp_language`) and theme (`rsp_theme`) are saved independently and are not part of JSON backups.
+The storage key is `rsp_state_v2`; its internal format and regular JSON output use `meta.ver: 4`. Capacity-defined water retains `unit: "bottle"` and `volumeMl`; the date type is retained as `expiryType`. Formats 1, 2, 3 and 4 can be read; unsupported versions are rejected. Missing date types are not inferred. Compatibility keys such as `rsp_items` remain read-only. Language (`rsp_language`) and theme (`rsp_theme`) are saved independently and are not part of JSON backups.
 
 ---
 

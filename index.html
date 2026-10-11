@@ -60,14 +60,36 @@
       <div class="filter-row">
         <input aria-label="在庫を検索" type="text" id="search" placeholder="検索（品名・カテゴリ・単位）" />
         <select id="sort" aria-label="在庫の並べ替え">
-          <option value="expiryAsc">賞味期限 早い順</option>
-          <option value="expiryDesc">賞味期限 遅い順</option>
+          <option value="expiryAsc">期限 早い順</option>
+          <option value="expiryDesc">期限 遅い順</option>
           <option value="nameAsc">品名 A→Z</option>
           <option value="nameDesc">品名 Z→A</option>
           <option value="catAsc">カテゴリ</option>
         </select>
       </div>
 
+      <div class="review-controls">
+        <label for="reviewFilter">見直し対象</label>
+        <select id="reviewFilter" aria-describedby="reviewHelp">
+          <option value="all">すべての在庫</option>
+          <option value="review">見直し対象すべて（数量0を除く）</option>
+          <option value="expired">期限切れ</option>
+          <option value="near">本日期限・期限間近</option>
+          <option value="undated">期限未入力</option>
+          <option value="untyped">期限の種類が未指定</option>
+          <option value="volume">水の容量不明</option>
+          <option value="calories">食料のカロリー未入力</option>
+          <option value="zero">数量0</option>
+        </select>
+        <button id="resetFilters" type="button" class="btn">検索・絞り込みを解除</button>
+      </div>
+      <p id="reviewHelp" class="note">検索と組み合わせて絞り込みます。期限間近の範囲はシステム設定に従います。集計・アラート・買い物メモは常に在庫全体が対象です。安全性の判定ではありません。</p>
+      <p id="reviewCount" role="status"></p>
+      <details class="date-guidance">
+        <summary>期限の種類と、このツールの扱い</summary>
+        <p>賞味期限は品質の目安であり、過ぎた瞬間に食べられなくなる期限ではありません。消費期限を過ぎた食品は食べないでください。どちらも未開封で、表示どおりに保存した場合の期限です。このツールは開封・保存状態を確認できないため、種類を問わず期限切れ・期限未入力を計画から除外します。医薬品などは製品の表示に従ってください。</p>
+        <a href="https://www.caa.go.jp/policies/policy/food_labeling/food_sanitation/expiration_date/" target="_blank" rel="noopener noreferrer">消費者庁：食品の期限表示</a>
+      </details>
       <div class="table-wrap" tabindex="0" role="region" aria-label="在庫一覧（横にスクロールできます）">
         <table id="stockTable">
           <thead>
@@ -832,8 +854,8 @@
               </datalist>
             </div>
             <div>
-              <label>賞味/使用期限
-                <button type="button" class="help-icon" data-tooltip="食品の賞味期限や医薬品の使用期限を入力します。期限が近づくと自動で警告を表示します。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
+              <label for="expiry">期限の日付
+                <button type="button" class="help-icon" data-tooltip="製品に表示された日付を入力します。期限の種類は別に選びます。日付や種類だけでは食品・医薬品の安全性を判定できません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
               </label>
               <div class="expiry-input-group">
                 <input type="date" id="expiry" />
@@ -842,6 +864,16 @@
                   <button type="button" class="btn-small" id="expiryNone">なし</button>
                 </div>
               </div>
+            </div>
+            <div>
+              <label for="expiryType">期限の種類</label>
+              <select id="expiryType" aria-describedby="expiryTypeHelp">
+                <option value="unspecified">未指定</option>
+                <option value="best-before">賞味期限</option>
+                <option value="use-by">消費期限</option>
+                <option value="expiration">使用期限</option>
+              </select>
+              <small id="expiryTypeHelp">製品の表示を確認して選びます。わからない場合は未指定のままにしてください。日付が空欄なら計画には算入しません。</small>
             </div>
             <div>
               <label>カロリー（1単位あたり, kcal）
@@ -865,12 +897,19 @@
     <form id="actionForm">
       <h2 id="actionTitle">在庫の数量操作</h2>
       <p id="actionItem"></p>
-      <p id="actionRule">補充は今回の期限を入力してください。同じ期限の場合だけ数量を合算し、それ以外は別行で記録します。</p>
+      <p id="actionRule">補充品の日付と期限の種類を確認してください。空欄でない日付と種類が両方同じ場合だけ合算し、それ以外は別行で記録します。</p>
       <label for="actionAmount">数量</label>
       <input id="actionAmount" type="number" min="0" max="1000000" step="any" required value="1">
       <div id="actionDateFields">
         <label for="actionExpiry">補充品の期限（未入力可）</label>
         <input id="actionExpiry" type="date">
+        <label for="actionExpiryType">期限の種類</label>
+        <select id="actionExpiryType">
+          <option value="unspecified">未指定</option>
+          <option value="best-before">賞味期限</option>
+          <option value="use-by">消費期限</option>
+          <option value="expiration">使用期限</option>
+        </select>
       </div>
       <p id="actionError" role="alert"></p>
       <p>記録上の数量を変更する操作です。食品や医薬品を消費・使用してよいかは判断しません。</p>

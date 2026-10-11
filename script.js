@@ -165,6 +165,7 @@ function openModal(mode = 'add', itemIndex = -1){
     $('#quantity').value = it.quantity;
     $('#unit').value = it.unit||'';
     $('#expiry').value = it.expiry||'';
+    $('#expiryType').value = it.expiryType ?? 'unspecified';
     $('#kcal').value = it.kcal!=null ? it.kcal : '';
     $('#editIndex').value = String(itemIndex);
     $('#waterMode').value = it.volumeMl === undefined ? 'total' : 'bottles';
@@ -267,7 +268,7 @@ $('#itemForm').addEventListener('submit', e => {
       name: $('#name').value, category: $('#category').value,
       quantity: $('#quantity').value, unit: $('#volumeMl').disabled ? $('#unit').value : 'bottle',
       ...($('#volumeMl').disabled ? {} : { volumeMl: $('#volumeMl').value }),
-      expiry: $('#expiry').value, kcal: $('#kcal').value,
+      expiry: $('#expiry').value, expiryType: $('#expiryType').value, kcal: $('#kcal').value,
       createdAt: idx >= 0 ? items[idx].createdAt : Date.now()
     });
   } catch (_) { $('#itemError').textContent = t('itemError'); return; }
@@ -288,7 +289,7 @@ $('#clearAll').addEventListener('click', () => {
   if (commitState({ ...currentState(), items: [] })) renderAll();
 });
 $('#exportJson').addEventListener('click', () => {
-  downloadJSON({ meta: { app: 'rollingstock-planner', ver: 3 }, ...currentState() }, 'rollingstock-data');
+  downloadJSON({ meta: { app: 'rollingstock-planner', ver: 4 }, ...currentState() }, 'rollingstock-data');
 });
 $('#exportRecovery').addEventListener('click', () => {
   const raw = stockStore.recovery();
@@ -329,6 +330,14 @@ $('#search').addEventListener('input', ()=>{
   renderTable();
 });
 $('#sort').addEventListener('change', renderTable);
+$('#reviewFilter').addEventListener('change', () => { currentPage = 1; renderTable(); });
+$('#resetFilters').addEventListener('click', () => {
+  $('#search').value = '';
+  $('#reviewFilter').value = 'all';
+  currentPage = 1;
+  renderTable();
+  $('#search').focus();
+});
 
 // Allow past dates for expiry input (e.g., already expired items)
 // No minimum date restriction
@@ -388,6 +397,8 @@ function renderTable(){
       return [it.name, it.category, StockMessages.ja[it.category], StockMessages.en[it.category], it.unit].filter(Boolean).some(s=>String(s).toLowerCase().includes(q));
     });
   }
+  filtered = filtered.filter(it => StockCore.matchesReview(it, $('#reviewFilter').value, day, alertMonths));
+  $('#reviewCount').textContent = t('reviewCount', { matched: filtered.length, total: items.length });
 
   filtered.sort((a,b)=>{
     const da = a.expiry ? parseDate(a.expiry) : null;
@@ -456,9 +467,9 @@ function renderTable(){
       <td>${categoryBadge}</td>
       <td>${fmtNum(it.quantity)}</td>
       <td>${escapeHtml(it.volumeMl === undefined ? (it.unit||'') : t('bottleUnit', { ml: fmtNum(it.volumeMl), liters: fmtNum(StockCore.waterVolume(it)) }))}</td>
-      <td>${it.expiry ? escapeHtml(it.expiry) : '—'}</td>
+      <td>${it.expiry ? escapeHtml(it.expiry) : '—'}<small class="expiry-type">${escapeHtml(labelForExpiryType(it.expiryType))}</small></td>
       <td>${kcalText}</td>
-      <td>${badge}</td>
+      <td>${badge}<small class="review-reasons">${escapeHtml(StockCore.reviewReasons(it, day, alertMonths).map(labelForReview).join(t('join')))}</small></td>
       <td>
         <button class="btn" data-use-one="${it.idx}" ${it.quantity < 1 ? 'disabled' : ''}>${t('useOne')}</button>
         <button class="btn" data-consume="${it.idx}" ${it.quantity === 0 ? 'disabled' : ''}>${t('consume')}</button>
@@ -559,14 +570,24 @@ function labelForCategory(c){
   };
   return map[c] || c;
 }
+function labelForExpiryType(type) {
+  const labels = { unspecified: t('type_unspecified'), 'best-before': t('type_best-before'),
+    'use-by': t('type_use-by'), expiration: t('type_expiration') };
+  return labels[type ?? 'unspecified'];
+}
+function labelForReview(reason) {
+  const labels = { expired: t('expired'), near: t('reviewNear'), undated: t('unknown'),
+    untyped: t('reviewUntyped'), volume: t('reviewVolume'), calories: t('reviewCalories'), zero: t('reviewZero') };
+  return labels[reason];
+}
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
-function performAction(kind, index, amount, expiry) {
+function performAction(kind, index, amount, expiry, expiryType = 'unspecified') {
   const before = StockCore.validateState(currentState());
   let candidate;
-  try { candidate = StockActions[kind](before, index, amount, expiry); }
+  try { candidate = StockActions[kind](before, index, amount, expiry, expiryType); }
   catch (_) {
     const message = t('actionError');
     $('#actionError').textContent = message; notice(message); return false;
@@ -585,6 +606,7 @@ function openAction(kind, index) {
   $('#actionAmount').value = '1';
   $('#actionAmount').step = items[index].volumeMl === undefined ? 'any' : '1';
   $('#actionExpiry').value = '';
+  $('#actionExpiryType').value = 'unspecified';
   $('#actionDateFields').hidden = kind !== 'replenish';
   $('#actionRule').hidden = kind !== 'replenish';
   $('#actionError').textContent = '';
@@ -597,7 +619,7 @@ $('#actionForm').addEventListener('submit', event => {
   if (!activeAction || activeAction.before !== JSON.stringify(currentState())) {
     $('#actionError').textContent = t('staleAction'); return;
   }
-  if (performAction(activeAction.kind, activeAction.index, $('#actionAmount').value, $('#actionExpiry').value)) {
+  if (performAction(activeAction.kind, activeAction.index, $('#actionAmount').value, $('#actionExpiry').value, $('#actionExpiryType').value)) {
     $('#actionDialog').close(); $('#undoAction').focus();
   }
 });
@@ -624,7 +646,7 @@ function renderAlerts() {
     const li = document.createElement('li');
     const status = StockCore.expiryStatus(it, StockCore.today(), alertMonths);
     const tag = status === 'expired' ? t('expired') : status === 'today' ? t('today') : t('near');
-    li.textContent = '[' + tag + '] ' + it.name + ' / ' + fmtNum(it.quantity) + ' ' + it.unit + ' / ' + it.expiry;
+    li.textContent = '[' + tag + '] ' + it.name + ' / ' + fmtNum(it.quantity) + ' ' + it.unit + ' / ' + it.expiry + ' / ' + labelForExpiryType(it.expiryType);
     expiryUl.appendChild(li);
   }
   if (!expiryUl.children.length) expiryUl.textContent = t('none');
@@ -632,7 +654,7 @@ function renderAlerts() {
   rollingUl.replaceChildren();
   for (const it of lists.rolling) {
     const li = document.createElement('li');
-    li.textContent = t('rollingItem', { name: it.name, expiry: it.expiry });
+    li.textContent = t('rollingItem', { name: it.name, expiry: it.expiry }) + ' / ' + labelForExpiryType(it.expiryType);
     rollingUl.appendChild(li);
   }
   if (!rollingUl.children.length) rollingUl.textContent = t('noRolling');

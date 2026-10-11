@@ -6,6 +6,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const CATEGORIES = ['food', 'water', 'medicine', 'pet-food', 'daily', 'tool', 'other'];
+  const EXPIRY_TYPES = ['unspecified', 'best-before', 'use-by', 'expiration'];
+  const REVIEW_FILTERS = ['all', 'review', 'expired', 'near', 'undated', 'untyped', 'volume', 'calories', 'zero'];
   const MAX_ITEMS = 5000;
   const MAX_FILE_BYTES = 10 * 1024 * 1024;
   const defaults = () => ({ adults: 1, children: 0, seniors: 0, dogs: 0, cats: 0,
@@ -59,6 +61,10 @@
       kcal: item.kcal === null || item.kcal === undefined || item.kcal === '' ? null : number(item.kcal, 1000000),
       createdAt: item.createdAt === undefined ? Date.now() : number(item.createdAt, Number.MAX_SAFE_INTEGER, true)
     };
+    if (item.expiryType !== undefined) {
+      if (!EXPIRY_TYPES.includes(item.expiryType)) fail('expiryType');
+      out.expiryType = item.expiryType;
+    }
     // Packaged water is explicit. Never infer bottle size from a name or total.
     if (item.volumeMl !== undefined) {
       if (item.category !== 'water' || out.unit !== 'bottle') fail('package');
@@ -83,7 +89,7 @@
   }
   function validateState(data) {
     if (!object(data) || !Array.isArray(data.items) || data.items.length > MAX_ITEMS) fail('items');
-    if (data.meta !== undefined && (!object(data.meta) || data.meta.app !== 'rollingstock-planner' || ![1, 2, 3].includes(data.meta.ver))) fail('version');
+    if (data.meta !== undefined && (!object(data.meta) || data.meta.app !== 'rollingstock-planner' || ![1, 2, 3, 4].includes(data.meta.ver))) fail('version');
     if (![1, 2, 3, 6].includes(data.alertMonths)) fail('months');
     return { items: data.items.map(validateItem), family: validateFamily(data.family), alertMonths: data.alertMonths };
   }
@@ -124,6 +130,24 @@
     }
     return out;
   }
+  // Review flags describe records, never whether a product is safe to consume.
+  function reviewReasons(item, day = today(), months = 2) {
+    if (item.quantity === 0) return ['zero'];
+    const reasons = [], status = expiryStatus(item, day, months);
+    if (status === 'expired') reasons.push('expired');
+    if (status === 'today' || status === 'near') reasons.push('near');
+    if (status === 'unknown' || status === 'invalid') reasons.push('undated');
+    if (!item.expiryType || item.expiryType === 'unspecified') reasons.push('untyped');
+    if (item.category === 'water' && waterVolume(item) === null) reasons.push('volume');
+    if (item.category === 'food' && item.kcal === null) reasons.push('calories');
+    return reasons;
+  }
+  function matchesReview(item, filter, day = today(), months = 2) {
+    if (!REVIEW_FILTERS.includes(filter)) fail('filter');
+    if (filter === 'all') return true;
+    const reasons = reviewReasons(item, day, months);
+    return filter === 'review' ? reasons.some(reason => reason !== 'zero') : reasons.includes(filter);
+  }
   function needs(family) {
     const people = family.adults + family.children + family.seniors;
     const petUnknown = (family.dogs > 0 && family.dogWater === null) || (family.cats > 0 && family.catWater === null);
@@ -152,6 +176,6 @@
     for (const list of Object.values(out)) list.sort((a, b) => a.expiry.localeCompare(b.expiry));
     return out;
   }
-  return { CATEGORIES, MAX_ITEMS, MAX_FILE_BYTES, defaults, initial, number, dateNumber, today, addMonths,
-    validateItem, validateFamily, validateState, expiryStatus, waterVolume, totals, needs, metric, coverage, alerts };
+  return { CATEGORIES, EXPIRY_TYPES, REVIEW_FILTERS, MAX_ITEMS, MAX_FILE_BYTES, defaults, initial, number, dateNumber, today, addMonths,
+    validateItem, validateFamily, validateState, expiryStatus, waterVolume, reviewReasons, matchesReview, totals, needs, metric, coverage, alerts };
 });
