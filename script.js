@@ -385,7 +385,7 @@ function renderTable(){
   let filtered = items.map((it, idx)=> ({...it, idx}));
   if(q){
     filtered = filtered.filter(it=>{
-      return [it.name, it.category, labelForCategory(it.category), it.unit].filter(Boolean).some(s=>String(s).toLowerCase().includes(q));
+      return [it.name, it.category, StockMessages.ja[it.category], StockMessages.en[it.category], it.unit].filter(Boolean).some(s=>String(s).toLowerCase().includes(q));
     });
   }
 

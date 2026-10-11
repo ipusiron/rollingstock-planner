@@ -1089,6 +1089,9 @@ progress { width: 100%; height: 1.25rem; accent-color: var(--accent); }
 #stockTable { min-width: 760px; }
 #stockTable td:first-child { max-width: 18rem; }
 #stockTable button { margin: .25rem; }
+#stockTable th, #stockTable td:nth-child(3), #stockTable td:nth-child(5) { white-space: nowrap; }
+#stockTable td:nth-child(4) { min-width: 8rem; }
+#stockTable td:last-child { min-width: 15rem; width: 15rem; }
 .pagination { flex-wrap: wrap; gap: .5rem; padding: .5rem; }
 #basics details[open] > table { width: calc(100% - 2rem); margin: 1rem; table-layout: fixed; }
 #basics details[open] > div { margin: 1rem; }
@@ -1115,7 +1118,7 @@ small { font-size: .875rem; }
 .header-actions .theme-toggle { align-self: auto; }
 
 #shoppingBottleMl { width: 12rem; max-width: 100%; }
-#shoppingText { width: 100%; box-sizing: border-box; color: var(--text); background: var(--bg); padding: .75rem; }
+#shoppingText { width: 100%; box-sizing: border-box; color: var(--text); background: var(--bg); padding: .75rem; font: inherit; font-size: 16px; line-height: 1.6; }
 #shoppingPrint { display: none; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media print {
   body.print-shopping { background: white; color: black; }
