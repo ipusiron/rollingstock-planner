@@ -12,6 +12,20 @@ test('new data writes once, atomically to one key', () => {
   store.save(C.initial());
   assert.deepEqual([...s.map.keys()], [S.KEY]);
 });
+
+test('format 3 preserves explicit capacity and reads formats 1 and 2 without guessing', () => {
+  for (const ver of [1,2,3]) {
+    const seed={meta:{app:'rollingstock-planner',ver},...C.initial()};
+    seed.items=[C.validateItem({name:'water',category:'water',unit:ver===3?'bottle':'L',quantity:6,expiry:'2099-01-01',...(ver===3?{volumeMl:2000}:{})})];
+    const s=storage({[S.KEY]:JSON.stringify(seed)}), store=S.create(()=>s);
+    const loaded=store.load(); assert.equal(loaded.problem,null);
+    assert.equal(loaded.data.items[0].volumeMl,ver===3?2000:undefined);
+    store.save(loaded.data);
+    assert.equal(JSON.parse(s.getItem(S.KEY)).meta.ver,3);
+    const again=S.create(()=>s).load();
+    assert.deepEqual(again.data,loaded.data);
+  }
+});
 test('legacy import preserves all legacy raw values and does not write on load', () => {
   const seed = { rsp_items: '[]', rsp_family: JSON.stringify(C.defaults()), rsp_alert_months: '3' };
   const s = storage(seed), store = S.create(() => s);
@@ -40,7 +54,7 @@ test('corrupt current state never falls back to stale legacy and remains recover
   assert.equal(store.recovery().state, '{broken');
   assert.throws(() => store.save(C.initial()));
   assert.equal(s.getItem(S.KEY), '{broken');
-  store.save(C.initial(), true); assert.equal(JSON.parse(s.getItem(S.KEY)).meta.ver, 2);
+  store.save(C.initial(), true); assert.equal(JSON.parse(s.getItem(S.KEY)).meta.ver, 3);
 });
 test('conflicting tab cannot overwrite another update, including legacy updates', () => {
   const s = storage(), first = S.create(() => s), second = S.create(() => s);

@@ -14,10 +14,13 @@
 <body>
   <noscript>このツールの計算と保存にはJavaScriptが必要です。有効にして再読込してください。</noscript>
   <header class="app-header">
+    <div class="header-actions">
+    <button type="button" id="languageToggle" class="btn" lang="en">English</button>
     <button class="theme-toggle" id="themeToggle" aria-label="テーマ切り替え">
       <span id="themeIcon">☀️</span>
       <span id="themeText">ライトモードへ切り替え</span>
     </button>
+    </div>
     <h1>RollingStock Planner</h1>
     <p class="tagline">家族とペットの備蓄を記録し、期限と計画量を確認するツール。</p>
   </header>
@@ -50,6 +53,7 @@
             <span>+</span>
             <span>アイテム追加</span>
           </button>
+          <button id="undoAction" type="button" class="btn" disabled>直前の消費・補充を取り消す</button>
         </div>
       </div>
 
@@ -104,7 +108,8 @@
         </div>
       </div>
       <p id="stockLimits" class="note"></p>
-      <p>在庫の合計と、計画へ算入した量は異なります。水は「水」カテゴリのL・mLのみ、人用カロリーは「食料」カテゴリのみ集計します。期限切れと期限未入力は計画から除外します。</p>
+      <p>在庫の合計と、計画へ算入した量は異なります。水は「水」カテゴリのL・mL、または容量を指定した本数を集計します。人用カロリーは「食料」カテゴリのみ集計し、期限切れと期限未入力は計画から除外します。</p>
+      <p>取り消せるのは、このタブを開いてから直前に行った消費・補充1回だけです。ほかの変更を保存すると取り消せなくなります。</p>
     </section>
 
     <!-- Family Setup Tab -->
@@ -251,6 +256,19 @@
         </div>
       </div>
 
+      <div id="shoppingCard" class="card">
+        <h3>不足分の買い物メモ</h3>
+        <label for="shoppingBottleMl">買う水の1本の容量（mL）</label>
+        <input id="shoppingBottleMl" type="number" min="1" max="1000000" step="1" value="2000" required>
+        <p>保存済みの家族設定と在庫から計算します。本数は不足量を満たすよう切り上げます。食料はkcalの不足だけを示し、缶数や食数には換算しません。</p>
+        <textarea id="shoppingText" rows="12" readonly aria-label="買い物メモ"></textarea>
+        <pre id="shoppingPrint"></pre>
+        <div class="inline-controls">
+          <button id="copyShopping" class="btn" type="button">メモをコピー</button>
+          <button id="printShopping" class="btn" type="button">メモを印刷</button>
+        </div>
+        <p id="shoppingStatus" role="status"></p>
+      </div>
       <h2>提案</h2>
       <div class="card expert-advice">
         <div class="expert-header">
@@ -779,15 +797,24 @@
                 <option value="other">その他</option>
               </select>
             </div>
+            <div id="waterModeFields">
+              <label for="waterMode">水の登録方法</label>
+              <select id="waterMode"><option value="total">合計容量で登録</option><option value="bottles">本数と1本の容量で登録</option></select>
+              <div id="bottleFields" hidden>
+                <label for="volumeMl">1本の容量（mL）</label>
+                <input id="volumeMl" type="number" min="1" max="1000000" step="1" value="2000">
+                <small>2Lなら2000。数量には本数を入力します。既存の合計容量から本数を推測しません。</small>
+              </div>
+            </div>
             <div>
               <label>数量<span class="req">*</span>
-                <button type="button" class="help-icon" data-tooltip="水2Lボトル6本は合計容量12、単位Lで登録します。500mLは数量500、単位mLです。本や箱の容量は推測しません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
+                <button type="button" class="help-icon" data-tooltip="合計容量で登録する場合、2Lボトル6本は数量12・単位Lです。本数で登録する場合は数量6・1本2000mLです。箱の容量は推測しません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
               </label>
               <input type="number" id="quantity" min="0" max="1000000" step="0.01" required value="1" />
             </div>
             <div>
               <label>単位
-                <button type="button" class="help-icon" data-tooltip="数量の単位を記入します（例：個、缶、袋、L、本、箱）。水カテゴリでLまたはmLの場合だけ水量を集計します。他のカテゴリの液体は水として数えません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
+                <button type="button" class="help-icon" data-tooltip="数量の単位を記入します（例：個、缶、袋、L、本、箱）。水はL・mL、または容量を指定した本数で集計します。他のカテゴリの液体は水として数えません。" aria-label="項目の説明" aria-controls="helpPopover">?</button>
               </label>
               <input type="text" id="unit" maxlength="50" list="unitPresets" placeholder="選択または入力" />
               <datalist id="unitPresets">
@@ -834,8 +861,30 @@
   </div>
 
   <div id="helpPopover" popover role="note"></div>
+  <dialog id="actionDialog" aria-labelledby="actionTitle">
+    <form id="actionForm">
+      <h2 id="actionTitle">在庫の数量操作</h2>
+      <p id="actionItem"></p>
+      <p id="actionRule">補充は今回の期限を入力してください。同じ期限の場合だけ数量を合算し、それ以外は別行で記録します。</p>
+      <label for="actionAmount">数量</label>
+      <input id="actionAmount" type="number" min="0" max="1000000" step="any" required value="1">
+      <div id="actionDateFields">
+        <label for="actionExpiry">補充品の期限（未入力可）</label>
+        <input id="actionExpiry" type="date">
+      </div>
+      <p id="actionError" role="alert"></p>
+      <p>記録上の数量を変更する操作です。食品や医薬品を消費・使用してよいかは判断しません。</p>
+      <div class="storage-actions">
+        <button class="btn primary" type="submit">確定する</button>
+        <button id="cancelAction" class="btn" type="button">キャンセル</button>
+      </div>
+    </form>
+  </dialog>
   <script src="stock-core.js"></script>
+  <script src="stock-actions.js"></script>
   <script src="stock-store.js"></script>
+  <script src="messages.js"></script>
+  <script src="i18n.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

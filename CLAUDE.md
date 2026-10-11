@@ -45,13 +45,15 @@ Use a feature branch and pull request. Both push and pull_request Test runs must
 
 | Key | Type | Description |
 |---|---|---|
-| rsp_state_v2 | JSON object | Atomic envelope: meta {app, ver:2}, items, family, alertMonths |
+| rsp_state_v2 | JSON object | Atomic envelope: meta {app, ver:3}, items, family, alertMonths; key name is not the format version |
 | rsp_items | JSON array | Read-only compatibility source, preserved unchanged |
 | rsp_family | JSON object | Read-only compatibility source, preserved unchanged |
 | rsp_alert_months | string | Read-only compatibility source, preserved unchanged |
 | rsp_theme | string | light or dark, independent optional preference |
+| rsp_language | string | ja or en, independent optional preference |
 
 Items contain name, category, quantity, unit, expiry, kcal and createdAt.
+Water may additionally contain explicit integer volumeMl, with unit=bottle and integer quantity. Never infer this field from names or total-volume records.
 Family contains adults, children, seniors, dogs, cats, days, waterPerPerson,
 adultKcal, childKcal, seniorKcal, dogWater and catWater.
 
@@ -61,7 +63,7 @@ adultKcal, childKcal, seniorKcal, dogWater and catWater.
 2. StockStore loads without writing. Corrupt current data must not silently fall back to compatibility keys.
 3. commitState saves a validated candidate before replacing in-memory state.
 4. Conflicts and storage errors preserve the confirmed state and user input.
-5. renderAll updates the table, totals, alerts and coverage even when items is empty.
+5. renderAll updates the table, totals, alerts, coverage and shopping memo even when items is empty.
 6. refreshDay refreshes derived date-dependent output on day changes.
 
 ### UI Tabs (5 total)
@@ -75,6 +77,9 @@ adultKcal, childKcal, seniorKcal, dogWater and catWater.
 ### Key Calculation Logic
 
 - Water: category water AND unit L/ℓ or mL (case insensitive); mL is divided by 1000. Never infer bottle or box volume.
+- Explicit bottled water uses quantity × volumeMl / 1000. Purchase counts round up; unknown or zero targets stay uncalculated.
+- StockActions returns validated immutable candidates. Replenish combines only identical nonempty dates; other dates create a row.
+- One-step undo survives language/theme changes, but not another successful save or reload. Failed saves preserve it.
 - Human calories: category food only, quantity multiplied by kcal per unit.
 - Ledger totals include dated and undated records. Planned totals exclude expired and undated records.
 - Zero quantity is valid but excluded from totals, alert lists and category counts.
@@ -96,7 +101,7 @@ Dates do not establish food safety. Never recommend consuming expired food or me
 
 ## Code Conventions
 
-- **Japanese UI**: All labels, messages, and content are in Japanese
+- **Bilingual UI**: messages.js provides Japanese/English text. URL language > saved choice > browser language. Switching preserves unfinished input and never translates user data.
 - **Category codes**: `food`, `water`, `medicine`, `pet-food`, `daily`, `tool`, `other`
 - **Date format**: ISO 8601 (`YYYY-MM-DD`) for storage and `input[type="date"]`
 - **No dependencies**: Browser scripts and Node.js standard test runner only
@@ -106,6 +111,7 @@ Dates do not establish food safety. Never recommend consuming expired food or me
 - Edit mode uses openModal('edit', itemIndex); save failures leave the dialog and inputs intact.
 - Import replaces the entire state only after full validation, confirmation and successful persistence.
 - Import limit: 10 MiB and 5000 rows. Reject any invalid row instead of dropping it.
+- Formats 1, 2 and 3 can be read; save/export format is 3, including volumeMl. Reject unsupported versions.
 - Theme default is light, applied before CSS by theme-init.js.
 - Help uses a native popover; Escape closes it before the item dialog.
 - Tabs support arrows/Home/End; modal focus is trapped and restored; background is inert.
@@ -143,7 +149,10 @@ rollingstock-planner/
 ├── index.html        # Five tabs, dialog and educational content
 ├── script.js         # UI events and rendering
 ├── stock-core.js     # Pure calculations, calendar dates and validation
+├── stock-actions.js  # Use, replenish, undo and shopping calculations
 ├── stock-store.js    # Persistence, conflicts and recovery
+├── messages.js       # Complete Japanese/English dictionaries
+├── i18n.js           # Interface binding and language preference
 ├── theme-init.js     # Early optional theme preference
 ├── style.css         # Light/dark, mobile-first layout
 ├── package.json      # Dependency-free npm test
@@ -151,6 +160,7 @@ rollingstock-planner/
 ├── .github/workflows/test.yml
 ├── assets/           # Documentation screenshots
 ├── README.md         # Usage and limitations
+├── README.en.md      # Complete English usage and limitations
 ├── TECHNICAL.md      # Implementation reference
 └── CLAUDE.md         # This guide
 ```

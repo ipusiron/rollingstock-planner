@@ -1089,6 +1089,9 @@ progress { width: 100%; height: 1.25rem; accent-color: var(--accent); }
 #stockTable { min-width: 760px; }
 #stockTable td:first-child { max-width: 18rem; }
 #stockTable button { margin: .25rem; }
+#stockTable th, #stockTable td:nth-child(3), #stockTable td:nth-child(5) { white-space: nowrap; }
+#stockTable td:nth-child(4) { min-width: 8rem; }
+#stockTable td:last-child { min-width: 15rem; width: 15rem; }
 .pagination { flex-wrap: wrap; gap: .5rem; padding: .5rem; }
 #basics details[open] > table { width: calc(100% - 2rem); margin: 1rem; table-layout: fixed; }
 #basics details[open] > div { margin: 1rem; }
@@ -1104,4 +1107,22 @@ small { font-size: .875rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+#actionDialog { width: min(34rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; color: var(--text); background: var(--card); border: 1px solid var(--line-strong); border-radius: 1rem; padding: 1.25rem; }
+#actionDialog::backdrop { background: #0009; }
+#actionDialog input { width: 100%; }
+#actionError { color: var(--bad); }
+.inline-controls { display: flex; flex-wrap: wrap; gap: .75rem; }
+.header-actions { display: flex; flex-wrap: wrap; align-self: flex-end; gap: .75rem; align-items: center; }
+.header-actions .theme-toggle { align-self: auto; }
+
+#shoppingBottleMl { width: 12rem; max-width: 100%; }
+#shoppingText { width: 100%; box-sizing: border-box; color: var(--text); background: var(--bg); padding: .75rem; font: inherit; font-size: 16px; line-height: 1.6; }
+#shoppingPrint { display: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media print {
+  body.print-shopping { background: white; color: black; }
+  body.print-shopping > :not(main), body.print-shopping main > :not(#alerts),
+  body.print-shopping #alerts > :not(#shoppingCard), body.print-shopping #shoppingCard > :not(#shoppingPrint) { display: none !important; }
+  body.print-shopping #alerts, body.print-shopping #shoppingCard, body.print-shopping #shoppingPrint { display: block !important; color: black; background: white; border: 0; }
 }
