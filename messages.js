@@ -517,6 +517,17 @@
   const ja = {}, en = {};
   pairs.forEach(([source, translation], index) => { ja['s' + index] = source; en['s' + index] = translation; });
   const dynamic = {
+  "dateSortAsc": ["期限 早い順", "Date: earliest first"],
+  "dateSortDesc": ["期限 遅い順", "Date: latest first"],
+  "dateLabel": ["期限の日付", "Label date"],
+  "dateTypeLabel": ["期限の種類", "Date type"],
+  "type_unspecified": ["未指定", "Unspecified"],
+  "type_best-before": ["賞味期限", "Best-before date"],
+  "type_use-by": ["消費期限", "Use-by date"],
+  "type_expiration": ["使用期限", "Expiration date"],
+  "dateHelp": ["製品に表示された日付を入力します。期限の種類は別に選びます。日付や種類だけでは食品・医薬品の安全性を判定できません。", "Enter the date printed on the product and select its type separately. A date or its type alone cannot establish food or medicine safety."],
+  "typeHelp": ["製品の表示を確認して選びます。わからない場合は未指定のままにしてください。日付が空欄なら計画には算入しません。", "Check the product label before selecting a type. Leave it unspecified if unknown. Records without a date are excluded from the plan."],
+  "replenishRule": ["補充品の日付と期限の種類を確認してください。空欄でない日付と種類が両方同じ場合だけ合算し、それ以外は別行で記録します。", "Check the new stock's date and date type. Quantities combine only when both the nonempty date and type match; otherwise, a separate row is created."],
   "conflict": [
     "別のタブでデータが変更されました。現在の入力を控えてから再読込してください。保存は行っていません。",
     "Another tab changed the data. Keep a copy of your current input, then reload. Nothing was saved."

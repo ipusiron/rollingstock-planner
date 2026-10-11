@@ -1126,3 +1126,4 @@ small { font-size: .875rem; }
   body.print-shopping #alerts > :not(#shoppingCard), body.print-shopping #shoppingCard > :not(#shoppingPrint) { display: none !important; }
   body.print-shopping #alerts, body.print-shopping #shoppingCard, body.print-shopping #shoppingPrint { display: block !important; color: black; background: white; border: 0; }
 }
+.expiry-type { display: block; font-size: 0.875rem; white-space: normal; }
